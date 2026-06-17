@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+// import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import 'package:boxicons/boxicons.dart';
 import '../../../config/app_colors.dart';
 import 'profile_models.dart';
@@ -167,119 +167,119 @@ class SectionNilaiSiswa extends StatelessWidget {
 // SECTION TABUNGAN SISWA
 // ═══════════════════════════════════════════════════════════
 
-class SectionTabunganSiswa extends StatelessWidget {
-  final DataTabungan tabungan;
+// class SectionTabunganSiswa extends StatelessWidget {
+//   final DataTabungan tabungan;
 
-  const SectionTabunganSiswa({super.key, required this.tabungan});
+//   const SectionTabunganSiswa({super.key, required this.tabungan});
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Boxicons.bx_wallet, size: 16, color: const Color(0xFFDC2626)),
-              const SizedBox(width: 6),
-              Text(
-                'Tabungan Sekolah',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
+//   @override
+//   Widget build(BuildContext context) {
+//     return Padding(
+//       padding: const EdgeInsets.symmetric(horizontal: 20),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Row(
+//             children: [
+//               Icon(Boxicons.bx_wallet, size: 16, color: const Color(0xFFDC2626)),
+//               const SizedBox(width: 6),
+//               Text(
+//                 'Tabungan Sekolah',
+//                 style: GoogleFonts.poppins(
+//                   fontSize: 14,
+//                   fontWeight: FontWeight.w700,
+//                   color: AppColors.textPrimary,
+//                   letterSpacing: -0.2,
+//                 ),
+//               ),
+//             ],
+//           ),
 
-          const SizedBox(height: 12),
+//           const SizedBox(height: 12),
 
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1D4ED8), Color(0xFF1E40AF)],
-              ),
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF1D4ED8).withOpacity(0.28),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Boxicons.bx_wallet,
-                    size: 24,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tabungan.label,
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white.withOpacity(0.75),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        tabungan.formatRupiah,
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Icon(
-                      FeatherIcons.trendingUp,
-                      size: 16,
-                      color: Colors.white.withOpacity(0.6),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      tabungan.tanggalUpdate,
-                      style: GoogleFonts.poppins(
-                        fontSize: 9.5,
-                        color: Colors.white.withOpacity(0.55),
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+//           Container(
+//             padding: const EdgeInsets.all(20),
+//             decoration: BoxDecoration(
+//               gradient: const LinearGradient(
+//                 begin: Alignment.topLeft,
+//                 end: Alignment.bottomRight,
+//                 colors: [Color(0xFF1D4ED8), Color(0xFF1E40AF)],
+//               ),
+//               borderRadius: BorderRadius.circular(18),
+//               boxShadow: [
+//                 BoxShadow(
+//                   color: const Color(0xFF1D4ED8).withOpacity(0.28),
+//                   blurRadius: 20,
+//                   offset: const Offset(0, 6),
+//                 ),
+//               ],
+//             ),
+//             child: Row(
+//               crossAxisAlignment: CrossAxisAlignment.center,
+//               children: [
+//                 Container(
+//                   width: 48,
+//                   height: 48,
+//                   decoration: BoxDecoration(
+//                     color: Colors.white.withOpacity(0.15),
+//                     borderRadius: BorderRadius.circular(14),
+//                   ),
+//                   child: const Icon(
+//                     Boxicons.bx_wallet,
+//                     size: 24,
+//                     color: Colors.white,
+//                   ),
+//                 ),
+//                 const SizedBox(width: 16),
+//                 Expanded(
+//                   child: Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       Text(
+//                         tabungan.label,
+//                         style: GoogleFonts.poppins(
+//                           fontSize: 11,
+//                           fontWeight: FontWeight.w400,
+//                           color: Colors.white.withOpacity(0.75),
+//                         ),
+//                       ),
+//                       const SizedBox(height: 2),
+//                       Text(
+//                         tabungan.formatRupiah,
+//                         style: GoogleFonts.poppins(
+//                           fontSize: 20,
+//                           fontWeight: FontWeight.w800,
+//                           color: Colors.white,
+//                           letterSpacing: -0.5,
+//                         ),
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//                 Column(
+//                   crossAxisAlignment: CrossAxisAlignment.end,
+//                   children: [
+//                     Icon(
+//                       FeatherIcons.trendingUp,
+//                       size: 16,
+//                       color: Colors.white.withOpacity(0.6),
+//                     ),
+//                     const SizedBox(height: 4),
+//                     Text(
+//                       tabungan.tanggalUpdate,
+//                       style: GoogleFonts.poppins(
+//                         fontSize: 9.5,
+//                         color: Colors.white.withOpacity(0.55),
+//                         fontWeight: FontWeight.w400,
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }

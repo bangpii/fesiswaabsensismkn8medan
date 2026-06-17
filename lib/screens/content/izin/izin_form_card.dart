@@ -3,141 +3,284 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
 import '../../../config/app_colors.dart';
+import '../../../services/izin_realtime_service.dart';
 import 'izin_models.dart';
 
 // ═══════════════════════════════════════════════════════════
-// IZIN FORM CARD — Form pengiriman izin ke guru
+// IZIN FORM MODAL — Dipanggil dari header sebagai bottom sheet
+// Terhubung ke IzinRealtimeService → POST /izin
 // ═══════════════════════════════════════════════════════════
 
-class IzinFormCard extends StatefulWidget {
-  final VoidCallback? onKirim;
-
-  const IzinFormCard({super.key, this.onKirim});
-
-  @override
-  State<IzinFormCard> createState() => _IzinFormCardState();
+/// Panggil fungsi ini dari IzinScreen saat button "Buat Izin" ditekan
+Future<void> showIzinFormModal(BuildContext context,
+    {VoidCallback? onSuccess}) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(0.45),
+    builder: (ctx) => _IzinFormSheet(onSuccess: onSuccess),
+  );
 }
 
-class _IzinFormCardState extends State<IzinFormCard> {
+// ─────────────────────────────────────────────────────────
+// Bottom Sheet Container
+// ─────────────────────────────────────────────────────────
+
+class _IzinFormSheet extends StatefulWidget {
+  final VoidCallback? onSuccess;
+
+  const _IzinFormSheet({this.onSuccess});
+
+  @override
+  State<_IzinFormSheet> createState() => _IzinFormSheetState();
+}
+
+class _IzinFormSheetState extends State<_IzinFormSheet>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _slideCtrl;
+  late Animation<Offset> _slideAnim;
+  late Animation<double> _fadeAnim;
+
   JenisIzin _jenisIzin = JenisIzin.sakit;
-  final _pesanController = TextEditingController();
-  String _namaGuru = 'Bu Rahma';
+  final _keteranganController = TextEditingController();
   DateTime _tanggalIzin = DateTime.now();
   bool _sedangKirim = false;
+  String? _errorMsg;
 
-  final List<String> _daftarGuru = [
-    'Bu Rahma',
-    'Pak Budi',
-    'Bu Sari',
-    'Pak Hendra',
-    'Bu Dewi',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _slideCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    )..forward();
+
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOutCubic),
+    );
+
+    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut),
+    );
+  }
 
   @override
   void dispose() {
-    _pesanController.dispose();
+    _slideCtrl.dispose();
+    _keteranganController.dispose();
     super.dispose();
   }
 
-  Future<void> _kirimIzin() async {
-    if (_pesanController.text.trim().isEmpty) return;
+  String _formatTanggalApi(DateTime d) {
+    final mm = d.month.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$mm-$dd';
+  }
+
+  Future<void> _kirim() async {
+    if (_sedangKirim) return;
     HapticFeedback.mediumImpact();
-    setState(() => _sedangKirim = true);
-    await Future.delayed(const Duration(seconds: 2));
-    HapticFeedback.heavyImpact();
     setState(() {
-      _sedangKirim = false;
-      _pesanController.clear();
+      _sedangKirim = true;
+      _errorMsg = null;
     });
-    widget.onKirim?.call();
+
+    final result = await IzinRealtimeService.create(
+      tanggal: _formatTanggalApi(_tanggalIzin),
+      jenis: _jenisIzin.apiValue,
+      keterangan: _keteranganController.text.trim().isEmpty
+          ? null
+          : _keteranganController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      HapticFeedback.heavyImpact();
+      Navigator.of(context).pop();
+      widget.onSuccess?.call();
+    } else {
+      setState(() {
+        _sedangKirim = false;
+        _errorMsg = result['message'] ?? 'Gagal mengirim izin';
+      });
+      HapticFeedback.vibrate();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.border,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.accent.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+
+    return SlideTransition(
+      position: _slideAnim,
+      child: FadeTransition(
+        opacity: _fadeAnim,
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          padding: EdgeInsets.only(bottom: bottomPad),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1D4ED8).withOpacity(0.12),
+                blurRadius: 32,
+                offset: const Offset(0, -4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Title ─────────────────────────────────────
-            Row(
-              children: [
-                Icon(
-                  FeatherIcons.send,
-                  size: 14,
-                  color: AppColors.accent,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Buat Izin Baru',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Drag Handle ───────────────────────────
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 4),
+                  width: 36,
+                  height: 3.5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(99),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
+              ),
 
-            // ── Kepada (Guru) ──────────────────────────────
-            _LabelField(label: 'Kepada Guru'),
-            const SizedBox(height: 6),
-            _DropdownGuru(
-              nilai: _namaGuru,
-              daftar: _daftarGuru,
-              onChange: (v) => setState(() => _namaGuru = v!),
-            ),
-            const SizedBox(height: 12),
+              Padding(
+                padding:
+                    const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Modal Header ──────────────────
+                    Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2563EB).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Icon(
+                            FeatherIcons.fileText,
+                            size: 15,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Buat Izin Baru',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Isi form berikut dengan benar',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              FeatherIcons.x,
+                              size: 13,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
 
-            // ── Tanggal Izin ───────────────────────────────
-            _LabelField(label: 'Tanggal Izin'),
-            const SizedBox(height: 6),
-            _TanggalPicker(
-              tanggal: _tanggalIzin,
-              onPilih: (t) => setState(() => _tanggalIzin = t),
-            ),
-            const SizedBox(height: 12),
+                    // ── Error Message ─────────────────
+                    if (_errorMsg != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: const Color(0xFFFCA5A5), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(FeatherIcons.alertCircle,
+                                size: 13, color: Color(0xFFDC2626)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMsg!,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: const Color(0xFFDC2626),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
 
-            // ── Jenis Izin ─────────────────────────────────
-            _LabelField(label: 'Jenis Izin'),
-            const SizedBox(height: 8),
-            _JenisIzinSelector(
-              nilai: _jenisIzin,
-              onChange: (v) => setState(() => _jenisIzin = v),
-            ),
-            const SizedBox(height: 12),
+                    // ── Tanggal Izin ──────────────────
+                    _FormLabel(label: 'Tanggal Izin'),
+                    const SizedBox(height: 6),
+                    _TanggalPicker(
+                      tanggal: _tanggalIzin,
+                      onPilih: (t) => setState(() => _tanggalIzin = t),
+                    ),
+                    const SizedBox(height: 14),
 
-            // ── Pesan / Keterangan ─────────────────────────
-            _LabelField(label: 'Keterangan'),
-            const SizedBox(height: 6),
-            _TextAreaPesan(controller: _pesanController),
-            const SizedBox(height: 16),
+                    // ── Jenis Izin ────────────────────
+                    _FormLabel(label: 'Jenis Izin'),
+                    const SizedBox(height: 8),
+                    _JenisIzinSelector(
+                      nilai: _jenisIzin,
+                      onChange: (v) => setState(() => _jenisIzin = v),
+                    ),
+                    const SizedBox(height: 14),
 
-            // ── Tombol Kirim ───────────────────────────────
-            _TombolKirim(
-              sedangKirim: _sedangKirim,
-              enabled: !_sedangKirim,
-              onKirim: _kirimIzin,
-            ),
-          ],
+                    // ── Keterangan ────────────────────
+                    _FormLabel(label: 'Keterangan (Opsional)'),
+                    const SizedBox(height: 6),
+                    _TextAreaKeterangan(controller: _keteranganController),
+                    const SizedBox(height: 20),
+
+                    // ── Tombol Kirim ──────────────────
+                    _TombolKirim(
+                      sedangKirim: _sedangKirim,
+                      onKirim: _kirim,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -145,12 +288,12 @@ class _IzinFormCardState extends State<IzinFormCard> {
 }
 
 // ─────────────────────────────────────────────────────────
-// Sub-Widgets
+// Sub Widgets
 // ─────────────────────────────────────────────────────────
 
-class _LabelField extends StatelessWidget {
+class _FormLabel extends StatelessWidget {
   final String label;
-  const _LabelField({required this.label});
+  const _FormLabel({required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -158,55 +301,8 @@ class _LabelField extends StatelessWidget {
       label,
       style: GoogleFonts.poppins(
         fontSize: 11,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
         color: AppColors.textSecondary,
-      ),
-    );
-  }
-}
-
-class _DropdownGuru extends StatelessWidget {
-  final String nilai;
-  final List<String> daftar;
-  final ValueChanged<String?> onChange;
-
-  const _DropdownGuru({
-    required this.nilai,
-    required this.daftar,
-    required this.onChange,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border, width: 1),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: nilai,
-          isExpanded: true,
-          icon: Icon(
-            FeatherIcons.chevronDown,
-            size: 15,
-            color: AppColors.textMuted,
-          ),
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppColors.textPrimary,
-          ),
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          items: daftar
-              .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-              .toList(),
-          onChanged: onChange,
-        ),
       ),
     );
   }
@@ -220,8 +316,8 @@ class _TanggalPicker extends StatelessWidget {
 
   String _format(DateTime d) {
     const bulan = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
     return '${d.day} ${bulan[d.month - 1]} ${d.year}';
   }
@@ -237,7 +333,9 @@ class _TanggalPicker extends StatelessWidget {
           lastDate: DateTime.now().add(const Duration(days: 30)),
           builder: (ctx, child) => Theme(
             data: Theme.of(ctx).copyWith(
-              colorScheme: ColorScheme.light(primary: AppColors.accent),
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF2563EB),
+              ),
             ),
             child: child!,
           ),
@@ -245,17 +343,18 @@ class _TanggalPicker extends StatelessWidget {
         if (hasil != null) onPilih(hasil);
       },
       child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border, width: 1),
+          color: const Color(0xFFF8FAFF),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFDDE6FF), width: 1.5),
         ),
         child: Row(
           children: [
-            Icon(FeatherIcons.calendar, size: 14, color: AppColors.accent),
-            const SizedBox(width: 8),
+            const Icon(FeatherIcons.calendar,
+                size: 15, color: Color(0xFF2563EB)),
+            const SizedBox(width: 10),
             Text(
               _format(tanggal),
               style: GoogleFonts.poppins(
@@ -265,7 +364,8 @@ class _TanggalPicker extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            Icon(FeatherIcons.chevronDown, size: 14, color: AppColors.textMuted),
+            const Icon(FeatherIcons.chevronDown,
+                size: 14, color: Color(0xFF94A3B8)),
           ],
         ),
       ),
@@ -281,34 +381,56 @@ class _JenisIzinSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Row(
       children: JenisIzin.values.map((jenis) {
         final aktif = nilai == jenis;
-        return GestureDetector(
-          onTap: () => onChange(jenis),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: aktif
-                  ? AppColors.accent.withOpacity(0.1)
-                  : AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
+        return Expanded(
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onChange(jenis);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: EdgeInsets.only(
+                  right: jenis != JenisIzin.values.last ? 8 : 0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              decoration: BoxDecoration(
                 color: aktif
-                    ? AppColors.accent.withOpacity(0.4)
-                    : AppColors.border,
-                width: aktif ? 1.5 : 1,
+                    ? const Color(0xFF2563EB).withOpacity(0.08)
+                    : const Color(0xFFF8FAFF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: aktif
+                      ? const Color(0xFF2563EB).withOpacity(0.5)
+                      : const Color(0xFFE2E8F0),
+                  width: aktif ? 1.5 : 1,
+                ),
               ),
-            ),
-            child: Text(
-              jenis.label,
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: aktif ? FontWeight.w600 : FontWeight.w400,
-                color: aktif ? AppColors.accent : AppColors.textSecondary,
+              child: Column(
+                children: [
+                  Icon(
+                    _iconJenis(jenis),
+                    size: 16,
+                    color: aktif
+                        ? const Color(0xFF2563EB)
+                        : AppColors.textMuted,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    jenis.label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight:
+                          aktif ? FontWeight.w600 : FontWeight.w400,
+                      color: aktif
+                          ? const Color(0xFF2563EB)
+                          : AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
           ),
@@ -316,20 +438,31 @@ class _JenisIzinSelector extends StatelessWidget {
       }).toList(),
     );
   }
+
+  IconData _iconJenis(JenisIzin jenis) {
+    switch (jenis) {
+      case JenisIzin.sakit:
+        return FeatherIcons.thermometer;
+      case JenisIzin.izin:
+        return FeatherIcons.fileText;
+      case JenisIzin.lainnya:
+        return FeatherIcons.moreHorizontal;
+    }
+  }
 }
 
-class _TextAreaPesan extends StatelessWidget {
+class _TextAreaKeterangan extends StatelessWidget {
   final TextEditingController controller;
 
-  const _TextAreaPesan({required this.controller});
+  const _TextAreaKeterangan({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border, width: 1),
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDDE6FF), width: 1.5),
       ),
       child: TextField(
         controller: controller,
@@ -345,7 +478,7 @@ class _TextAreaPesan extends StatelessWidget {
             color: AppColors.textMuted,
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(12),
+          contentPadding: const EdgeInsets.all(14),
         ),
       ),
     );
@@ -354,12 +487,10 @@ class _TextAreaPesan extends StatelessWidget {
 
 class _TombolKirim extends StatelessWidget {
   final bool sedangKirim;
-  final bool enabled;
   final VoidCallback onKirim;
 
   const _TombolKirim({
     required this.sedangKirim,
-    required this.enabled,
     required this.onKirim,
   });
 
@@ -367,23 +498,25 @@ class _TombolKirim extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 42,
+      height: 46,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          gradient: enabled
+          gradient: !sedangKirim
               ? const LinearGradient(
-                  colors: [Color(0xFF1D4ED8), Color(0xFF1E40AF)],
+                  colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 )
               : null,
-          color: enabled ? null : AppColors.border,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: enabled
+          color: sedangKirim ? const Color(0xFFCBD5E1) : null,
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: !sedangKirim
               ? [
                   BoxShadow(
-                    color: AppColors.accent.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: const Color(0xFF2563EB).withOpacity(0.32),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
                   ),
                 ]
               : null,
@@ -391,8 +524,8 @@ class _TombolKirim extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: enabled ? onKirim : null,
-            borderRadius: BorderRadius.circular(12),
+            onTap: sedangKirim ? null : onKirim,
+            borderRadius: BorderRadius.circular(13),
             child: Center(
               child: sedangKirim
                   ? const SizedBox(

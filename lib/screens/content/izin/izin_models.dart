@@ -1,43 +1,48 @@
 // ═══════════════════════════════════════════════════════════
-// IZIN MODELS — Data class & enum untuk halaman Izin
+// IZIN MODELS — Enum & Model untuk halaman Izin
 // ═══════════════════════════════════════════════════════════
 
-enum JenisIzin { sakit, keperluan, keluarga, lainnya }
-
-enum StatusIzin { menunggu, disetujui, ditolak }
-
-class RiwayatIzin {
-  final String id;
-  final DateTime tanggal;
-  final JenisIzin jenis;
-  final String keterangan;
-  final StatusIzin status;
-  final String namaPenerima;
-
-  const RiwayatIzin({
-    required this.id,
-    required this.tanggal,
-    required this.jenis,
-    required this.keterangan,
-    required this.status,
-    required this.namaPenerima,
-  });
-}
+enum JenisIzin { sakit, izin, lainnya }
 
 extension JenisIzinExt on JenisIzin {
   String get label {
     switch (this) {
       case JenisIzin.sakit:
         return 'Sakit';
-      case JenisIzin.keperluan:
-        return 'Keperluan';
-      case JenisIzin.keluarga:
-        return 'Keluarga';
+      case JenisIzin.izin:
+        return 'Izin';
       case JenisIzin.lainnya:
         return 'Lainnya';
     }
   }
+
+  /// Nilai yang dikirim ke backend API
+  String get apiValue {
+    switch (this) {
+      case JenisIzin.sakit:
+        return 'sakit';
+      case JenisIzin.izin:
+        return 'izin';
+      case JenisIzin.lainnya:
+        return 'lainnya';
+    }
+  }
+
+  static JenisIzin fromString(String? v) {
+    switch (v) {
+      case 'sakit':
+        return JenisIzin.sakit;
+      case 'izin':
+        return JenisIzin.izin;
+      case 'lainnya':
+        return JenisIzin.lainnya;
+      default:
+        return JenisIzin.izin;
+    }
+  }
 }
+
+enum StatusIzin { menunggu, disetujui, ditolak }
 
 extension StatusIzinExt on StatusIzin {
   String get label {
@@ -50,33 +55,70 @@ extension StatusIzinExt on StatusIzin {
         return 'Ditolak';
     }
   }
+
+  static StatusIzin fromString(String? v) {
+    switch (v) {
+      case 'disetujui':
+        return StatusIzin.disetujui;
+      case 'ditolak':
+        return StatusIzin.ditolak;
+      default:
+        return StatusIzin.menunggu;
+    }
+  }
 }
 
-List<RiwayatIzin> buatDummyRiwayatIzin() {
-  return [
-    RiwayatIzin(
-      id: '1',
-      tanggal: DateTime.now().subtract(const Duration(days: 1)),
-      jenis: JenisIzin.sakit,
-      keterangan: 'Demam dan tidak bisa hadir ke sekolah',
-      status: StatusIzin.disetujui,
-      namaPenerima: 'Bu Rahma',
-    ),
-    RiwayatIzin(
-      id: '2',
-      tanggal: DateTime.now().subtract(const Duration(days: 4)),
-      jenis: JenisIzin.keperluan,
-      keterangan: 'Ada urusan keluarga mendadak',
-      status: StatusIzin.menunggu,
-      namaPenerima: 'Pak Budi',
-    ),
-    RiwayatIzin(
-      id: '3',
-      tanggal: DateTime.now().subtract(const Duration(days: 10)),
-      jenis: JenisIzin.keluarga,
-      keterangan: 'Menghadiri acara pernikahan saudara',
-      status: StatusIzin.ditolak,
-      namaPenerima: 'Bu Sari',
-    ),
-  ];
+// ─────────────────────────────────────────────────────────
+// Model dari response backend
+// ─────────────────────────────────────────────────────────
+
+class RiwayatIzin {
+  final int id;
+  final String namaLengkap;
+  final String? nisn;
+  final String? kelas;
+  final String? jurusan;
+  final DateTime tanggalIzin;
+  final JenisIzin jenisIzin;
+  final String? keterangan;
+  final StatusIzin status;
+  final DateTime? disetujuiPada;
+  final DateTime createdAt;
+
+  const RiwayatIzin({
+    required this.id,
+    required this.namaLengkap,
+    this.nisn,
+    this.kelas,
+    this.jurusan,
+    required this.tanggalIzin,
+    required this.jenisIzin,
+    this.keterangan,
+    required this.status,
+    this.disetujuiPada,
+    required this.createdAt,
+  });
+
+  factory RiwayatIzin.fromJson(Map<String, dynamic> json) {
+    return RiwayatIzin(
+      id: json['id'] ?? 0,
+      namaLengkap: json['nama_lengkap'] ?? '',
+      nisn: json['nisn'],
+      kelas: json['kelas'],
+      jurusan: json['jurusan'],
+      tanggalIzin: DateTime.tryParse(json['tanggal_izin'] ?? '')?.toLocal() ?? DateTime.now(),
+      jenisIzin:
+          JenisIzinExt.fromString(json['jenis_izin']),
+      keterangan: json['keterangan'],
+      status: StatusIzinExt.fromString(json['status']),
+      disetujuiPada: json['disetujui_pada'] != null
+          ? DateTime.tryParse(json['disetujui_pada'])
+          : null,
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ??
+          DateTime.now(),
+    );
+  }
 }
+
+/// Dummy data sudah tidak diperlukan karena data realtime dari backend
+List<RiwayatIzin> buatDummyRiwayatIzin() => [];

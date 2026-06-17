@@ -26,7 +26,7 @@ class _AbsensiScreenState extends State<AbsensiScreen>
   // ── State ────────────────────────────────────────────────
   StatusAbsensi _statusHariIni = StatusAbsensi.belumAbsen;
   bool _sedangMemproses = false;
-  List<RiwayatAbsensi> _riwayat = [];
+  // _riwayat = buatDummyRiwayat();
 
   late AnimationController _pulseController;
   late AnimationController _slideController;
@@ -36,7 +36,7 @@ class _AbsensiScreenState extends State<AbsensiScreen>
   @override
   void initState() {
     super.initState();
-    _riwayat = buatDummyRiwayat();
+    // _riwayat = buatDummyRiwayat();
 
     _pulseController = AnimationController(
       vsync: this,
@@ -146,7 +146,7 @@ class _AbsensiScreenState extends State<AbsensiScreen>
 
                     // ── History Section ──────────────────────
                     SliverToBoxAdapter(
-                      child: AbsensiHistorySection(riwayat: _riwayat),
+                      child: const AbsensiHistorySection(),
                     ),
 
                     // ── Bottom Padding ───────────────────────

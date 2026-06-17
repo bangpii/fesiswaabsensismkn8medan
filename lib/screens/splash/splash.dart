@@ -16,30 +16,32 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  // Controllers
+  // ── Controllers ─────────────────────────────────────────
+  late AnimationController _meshController;
   late AnimationController _logoController;
   late AnimationController _textController;
+  late AnimationController _taglineController;
   late AnimationController _progressController;
-  late AnimationController _ringController;
   late AnimationController _exitController;
 
-  // Animations
+  // ── Animations ──────────────────────────────────────────
+  late Animation<double> _meshOpacity;
   late Animation<double> _logoScale;
   late Animation<double> _logoOpacity;
-  late Animation<double> _textOpacity;
-  late Animation<Offset> _textSlide;
-  late Animation<double> _subtitleOpacity;
-  late Animation<Offset> _subtitleSlide;
+  late Animation<double> _logoGlow;
+  late Animation<double> _titleOpacity;
+  late Animation<Offset> _titleSlide;
+  late Animation<double> _taglineOpacity;
+  late Animation<Offset> _taglineSlide;
   late Animation<double> _progressValue;
-  late Animation<double> _ringRotation;
-  late Animation<double> _exitScale;
+  late Animation<double> _progressOpacity;
   late Animation<double> _exitOpacity;
+  late Animation<double> _exitScale;
 
   @override
   void initState() {
     super.initState();
 
-    // Status bar transparan
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -50,111 +52,132 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _setupAnimations() {
-    // 1. Logo controller (0–900ms)
+    // Mesh background fade in
+    _meshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _meshOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _meshController, curve: Curves.easeOut),
+    );
+
+    // Logo animation (elastic + glow)
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1200),
     );
-    _logoScale = Tween<double>(begin: 0.4, end: 1.0).animate(
+    _logoScale = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
     );
     _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _logoController,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeIn),
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+      ),
+    );
+    _logoGlow = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _logoController,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
       ),
     );
 
-    // 2. Text controller (title + subtitle)
+    // Title animation
     _textController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 800),
     );
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _titleOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _textController, curve: Curves.easeOut),
     );
-    _textSlide = Tween<Offset>(
+    _titleSlide = Tween<Offset>(
       begin: const Offset(0, 0.4),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic),
     );
-    _subtitleOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _textController,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-      ),
+
+    // Tagline / instansi
+    _taglineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
     );
-    _subtitleSlide = Tween<Offset>(
-      begin: const Offset(0, 0.6),
+    _taglineOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _taglineController, curve: Curves.easeOut),
+    );
+    _taglineSlide = Tween<Offset>(
+      begin: const Offset(0, 0.3),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(
-        parent: _textController,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
-      ),
+      CurvedAnimation(parent: _taglineController, curve: Curves.easeOutCubic),
     );
 
-    // 3. Progress bar (5 detik penuh)
+    // Elegant progress indicator (3.5 detik)
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 5000),
+      duration: const Duration(milliseconds: 3500),
     );
     _progressValue = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
     );
-
-    // 4. Ring spinner (terus berputar)
-    _ringController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-    _ringRotation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _ringController, curve: Curves.linear),
+    _progressOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _progressController,
+        curve: const Interval(0.0, 0.2, curve: Curves.easeIn),
+      ),
     );
 
-    // 5. Exit animation
+    // Exit animation
     _exitController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _exitScale = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(parent: _exitController, curve: Curves.easeIn),
+      duration: const Duration(milliseconds: 800),
     );
     _exitOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _exitController, curve: Curves.easeIn),
+      CurvedAnimation(parent: _exitController, curve: Curves.easeInOut),
+    );
+    _exitScale = Tween<double>(begin: 1.0, end: 1.12).animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeInOut),
     );
   }
 
   void _startSequence() async {
-    // Logo muncul
-    await Future.delayed(const Duration(milliseconds: 200));
+    // Phase 1: Mesh background muncul
+    await Future.delayed(const Duration(milliseconds: 100));
+    _meshController.forward();
+
+    // Phase 2: Logo muncul dengan elastic
+    await Future.delayed(const Duration(milliseconds: 400));
     _logoController.forward();
 
-    // Text muncul setelah logo
+    // Phase 3: Title muncul
     await Future.delayed(const Duration(milliseconds: 700));
     _textController.forward();
 
-    // Progress + ring mulai
+    // Phase 4: Tagline instansi
     await Future.delayed(const Duration(milliseconds: 400));
+    _taglineController.forward();
+
+    // Phase 5: Progress mulai
+    await Future.delayed(const Duration(milliseconds: 300));
     _progressController.forward();
-    _ringController.repeat();
 
-    // Tunggu 5 detik loading selesai
-    await Future.delayed(const Duration(milliseconds: 5200));
-    _ringController.stop();
+    // Phase 6: Tunggu progress selesai
+    await Future.delayed(const Duration(milliseconds: 3800));
 
-    // Exit animation
+    // Phase 7: Exit animation
     await _exitController.forward();
 
-    // Navigate ke HelloPage
+    // Navigate
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (_, __, ___) => const MainScaffold(),
-          transitionDuration: const Duration(milliseconds: 600),
+          transitionDuration: const Duration(milliseconds: 700),
           transitionsBuilder: (_, animation, __, child) {
-            return FadeTransition(opacity: animation, child: child);
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
           },
         ),
       );
@@ -163,20 +186,22 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
+    _meshController.dispose();
     _logoController.dispose();
     _textController.dispose();
+    _taglineController.dispose();
     _progressController.dispose();
-    _ringController.dispose();
     _exitController.dispose();
     super.dispose();
   }
 
+  // ═══════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF0F6FF),
       body: AnimatedBuilder(
         animation: _exitController,
         builder: (context, child) {
@@ -189,149 +214,109 @@ class _SplashScreenState extends State<SplashScreen>
           );
         },
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            // — Background dekorasi: lingkaran blur slate di sudut —
-            Positioned(
-              top: -80,
-              right: -80,
-              child: _DecorCircle(
-                size: 280,
-                color: AppColors.accent.withOpacity(0.06),
-              ),
-            ),
-            Positioned(
-              bottom: -60,
-              left: -60,
-              child: _DecorCircle(
-                size: 220,
-                color: AppColors.primary.withOpacity(0.05),
-              ),
-            ),
-            Positioned(
-              top: size.height * 0.35,
-              left: -40,
-              child: _DecorCircle(
-                size: 120,
-                color: AppColors.accent.withOpacity(0.04),
-              ),
-            ),
-
-            // — Konten Utama —
-            SafeArea(
-              child: Column(
-                children: [
-                  // Top spacer + label instansi
-                  Expanded(
-                    flex: 2,
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: AnimatedBuilder(
-                        animation: _textController,
-                        builder: (context, _) {
-                          return FadeTransition(
-                            opacity: _subtitleOpacity,
-                            child: SlideTransition(
-                              position: _subtitleSlide,
-                              child: Text(
-                                'SMKN 8 MEDAN',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 4.0,
-                                  color: AppColors.accent.withOpacity(0.7),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+            // ── Background Network Mesh Biru ──────────────
+            AnimatedBuilder(
+              animation: _meshController,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _meshOpacity.value,
+                  child: CustomPaint(
+                    painter: _SplashNetworkMeshPainter(),
+                    size: Size.infinite,
                   ),
+                );
+              },
+            ),
 
-                  // Logo area
-                  Expanded(
-                    flex: 5,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Logo dengan ring spinner
-                          AnimatedBuilder(
-                            animation: Listenable.merge(
-                                [_logoController, _ringController]),
-                            builder: (context, _) {
-                              return Stack(
+            // ── Konten Utama (Tengah) ─────────────────────
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // ── Logo Besar di Tengah ───────────
+                      AnimatedBuilder(
+                        animation: _logoController,
+                        builder: (context, child) {
+                          return ScaleTransition(
+                            scale: _logoScale,
+                            child: FadeTransition(
+                              opacity: _logoOpacity,
+                              child: Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  // Ring spinner (muncul setelah logo)
-                                  if (_logoController.isCompleted)
-                                    Transform.rotate(
-                                      angle:
-                                          _ringRotation.value * 2 * math.pi,
-                                      child: SizedBox(
-                                        width: 148,
-                                        height: 148,
-                                        child: CustomPaint(
-                                          painter: _ArcSpinnerPainter(
-                                            color: AppColors.accent,
-                                            progress:
-                                                _progressValue.value,
-                                          ),
+                                  // Outer glow ring
+                                  Container(
+                                    width: 200,
+                                    height: 200,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.accent.withOpacity(
+                                              0.12 * _logoGlow.value),
+                                          blurRadius: 60,
+                                          spreadRadius: 15,
                                         ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Secondary ring
+                                  Container(
+                                    width: 180,
+                                    height: 180,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: AppColors.accent.withOpacity(
+                                            0.08 * _logoGlow.value),
+                                        width: 1.5,
                                       ),
                                     ),
-
+                                  ),
                                   // Logo container
-                                  ScaleTransition(
-                                    scale: _logoScale,
-                                    child: FadeTransition(
-                                      opacity: _logoOpacity,
-                                      child: Container(
-                                        width: 120,
-                                        height: 120,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.surface,
-                                          borderRadius:
-                                              BorderRadius.circular(32),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.accent
-                                                  .withOpacity(0.15),
-                                              blurRadius: 32,
-                                              offset: const Offset(0, 12),
-                                              spreadRadius: 0,
-                                            ),
-                                            BoxShadow(
-                                              color: AppColors.primary
-                                                  .withOpacity(0.06),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
-                                          border: Border.all(
-                                            color: AppColors.border,
-                                            width: 1,
-                                          ),
+                                  Container(
+                                    width: 150,
+                                    height: 150,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.accent.withOpacity(0.15),
+                                          blurRadius: 30,
+                                          offset: const Offset(0, 10),
+                                          spreadRadius: 0,
                                         ),
-                                        child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(31),
-                                          child: Image.asset(
-                                            AppLogo.appLogo,
-                                            width: 120,
-                                            height: 120,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                // Fallback jika asset belum ada
-                                                Center(
-                                              child: Text(
-                                                'A',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 48,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppColors.accent,
-                                                ),
-                                              ),
+                                        BoxShadow(
+                                          color: AppColors.primary.withOpacity(0.06),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                      border: Border.all(
+                                        color: AppColors.border,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: ClipOval(
+                                      child: Image.asset(
+                                        AppLogo.appLogo,
+                                        width: 150,
+                                        height: 150,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Center(
+                                          child: Text(
+                                            'A',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 56,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppColors.accent,
                                             ),
                                           ),
                                         ),
@@ -339,131 +324,165 @@ class _SplashScreenState extends State<SplashScreen>
                                     ),
                                   ),
                                 ],
-                              );
-                            },
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // App name
-                          AnimatedBuilder(
-                            animation: _textController,
-                            builder: (context, _) {
-                              return FadeTransition(
-                                opacity: _textOpacity,
-                                child: SlideTransition(
-                                  position: _textSlide,
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'Absensi SMKN 8 Medan',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.textPrimary,
-                                          letterSpacing: -0.5,
-                                          height: 1.1,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Sistem Absensi Digital',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w400,
-                                          color: AppColors.textSecondary,
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                  ),
 
-                  // Progress bar area
-                  Expanded(
-                    flex: 3,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(48, 24, 48, 0),
-                        child: AnimatedBuilder(
-                          animation: _progressController,
-                          builder: (context, _) {
-                            return Column(
+                      const SizedBox(height: 36),
+
+                      // ── Judul Utama (Tengah) ───────────
+                      AnimatedBuilder(
+                        animation: _textController,
+                        builder: (context, _) {
+                          return FadeTransition(
+                            opacity: _titleOpacity,
+                            child: SlideTransition(
+                              position: _titleSlide,
+                              child: Column(
+                                children: [
+                                  Text(
+                                    'SMKN 8 MEDAN',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.textPrimary,
+                                      letterSpacing: 1.5,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Sistem Absensi Digital',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.accent,
+                                      letterSpacing: 2.5,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 48),
+
+                      // ── Elegant Loading Indicator ──────
+                      AnimatedBuilder(
+                        animation: _progressController,
+                        builder: (context, _) {
+                          return FadeTransition(
+                            opacity: _progressOpacity,
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Progress bar
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(100),
-                                  child: Container(
-                                    height: 3,
-                                    width: double.infinity,
-                                    color: AppColors.border,
-                                    child: FractionallySizedBox(
-                                      alignment: Alignment.centerLeft,
-                                      widthFactor: _progressValue.value,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              AppColors.accent,
-                                              AppColors.accent
-                                                  .withOpacity(0.6),
-                                            ],
-                                          ),
+                                // Elegant dot indicator
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _buildDot(0),
+                                    const SizedBox(width: 8),
+                                    _buildDot(1),
+                                    const SizedBox(width: 8),
+                                    _buildDot(2),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                // Subtle progress line
+                                Container(
+                                  width: 120,
+                                  height: 2,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.border.withOpacity(0.4),
+                                    borderRadius: BorderRadius.circular(100),
+                                  ),
+                                  child: FractionallySizedBox(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: _progressValue.value,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            AppColors.accent,
+                                            AppColors.accent.withOpacity(0.4),
+                                          ],
                                         ),
+                                        borderRadius: BorderRadius.circular(100),
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 14),
-                                // Persentase
-                                Text(
-                                  '${(_progressValue.value * 100).toInt()}%',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.textMuted,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
                               ],
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
+                    ],
                   ),
+                ),
+              ),
+            ),
 
-                  // Footer
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 32),
-                    child: AnimatedBuilder(
-                      animation: _textController,
-                      builder: (context, _) {
-                        return FadeTransition(
-                          opacity: _subtitleOpacity,
-                          child: Text(
-                            '© 2026 SMKN 8 Medan',
-                            style: GoogleFonts.poppins(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w400,
-                              color: AppColors.textMuted,
-                              letterSpacing: 0.3,
+            // ── Footer (Bawah) ────────────────────────────
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 32,
+              child: AnimatedBuilder(
+                animation: _taglineController,
+                builder: (context, _) {
+                return FadeTransition(
+  opacity: _taglineOpacity,
+  child: SlideTransition(
+    position: _taglineSlide,
+    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Chip instansi
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withOpacity(0.07),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppColors.accent.withOpacity(0.12),
+                              width: 1,
                             ),
                           ),
-                        );
-                      },
+                          child: Text(
+                            'SMKN 8 MEDAN',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 3.0,
+                              color: AppColors.accent.withOpacity(0.7),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Copyright
+                        Text(
+                          '© 2026 SMKN 8 Medan',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w400,
+                            color: AppColors.textMuted.withOpacity(0.5),
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+  ),
+                  );
+                },
               ),
             ),
           ],
@@ -471,58 +490,111 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-}
 
-// ─── Helper Widgets ───────────────────────────────────────────
+  // Helper: Animated dot untuk loading indicator
+  Widget _buildDot(int index) {
+    return AnimatedBuilder(
+      animation: _progressController,
+      builder: (context, _) {
+        final progress = _progressValue.value;
+        final dotProgress = ((progress * 3) - index).clamp(0.0, 1.0);
+        final isActive = dotProgress > 0;
 
-class _DecorCircle extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const _DecorCircle({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
+        return Container(
+          width: isActive ? 8 : 6,
+          height: isActive ? 8 : 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isActive
+                ? AppColors.accent.withOpacity(0.6 + (dotProgress * 0.4))
+                : AppColors.border.withOpacity(0.5),
+          ),
+        );
+      },
     );
   }
 }
 
-class _ArcSpinnerPainter extends CustomPainter {
-  final Color color;
-  final double progress;
+// ═══════════════════════════════════════════════════════════
+// PAINTER: Network Mesh Biru (sama konsep dengan Profile)
+// ═══════════════════════════════════════════════════════════
 
-  _ArcSpinnerPainter({required this.color, required this.progress});
+class _SplashNetworkMeshPainter extends CustomPainter {
+  static final _rng = math.Random(42);
+  static List<Offset>? _nodes;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(0.25 + (progress * 0.35))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-
-    // Arc utama yang berputar
-    canvas.drawArc(rect, 0, math.pi * 1.4, false, paint);
-
-    // Arc kecil refleksi
-    final paint2 = Paint()
-      ..color = color.withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, math.pi * 1.5, math.pi * 0.4, false, paint2);
+  static List<Offset> _buildNodes(Size size) {
+    if (_nodes != null) return _nodes!;
+    final list = <Offset>[];
+    const cols = 7;
+    const rows = 14;
+    final dx = size.width / (cols - 1);
+    final dy = size.height / (rows - 1);
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        final x = c * dx + (_rng.nextDouble() - 0.5) * dx * 0.6;
+        final y = r * dy + (_rng.nextDouble() - 0.5) * dy * 0.6;
+        list.add(
+          Offset(
+            x.clamp(0, size.width),
+            y.clamp(0, size.height),
+          ),
+        );
+      }
+    }
+    _nodes = list;
+    return list;
   }
 
   @override
-  bool shouldRepaint(_ArcSpinnerPainter old) =>
-      old.progress != progress || old.color != color;
+  void paint(Canvas canvas, Size size) {
+    final nodes = _buildNodes(size);
+
+    // Gambar garis-garis jaringan
+    final linePaint = Paint()
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+
+    for (int i = 0; i < nodes.length; i++) {
+      for (int j = i + 1; j < nodes.length; j++) {
+        final dist = (nodes[i] - nodes[j]).distance;
+        if (dist < 120) {
+          final opacity = (1 - dist / 120) * 0.14;
+          linePaint.color = const Color(0xFF2563EB).withOpacity(opacity);
+          canvas.drawLine(nodes[i], nodes[j], linePaint);
+        }
+      }
+    }
+
+    // Gambar node/dot
+    for (int i = 0; i < nodes.length; i++) {
+      final isBig = i % 8 == 0;
+      final isAccent = i % 17 == 0;
+
+      // Glow untuk node accent
+      if (isAccent) {
+        canvas.drawCircle(
+          nodes[i],
+          7,
+          Paint()
+            ..color = const Color(0xFF3B82F6).withOpacity(0.06)
+            ..style = PaintingStyle.fill,
+        );
+      }
+
+      // Node utama
+      canvas.drawCircle(
+        nodes[i],
+        isBig ? 3.2 : 1.6,
+        Paint()
+          ..color = isBig
+              ? const Color(0xFF2563EB).withOpacity(0.20)
+              : const Color(0xFF93C5FD).withOpacity(0.40)
+          ..style = PaintingStyle.fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SplashNetworkMeshPainter old) => false;
 }

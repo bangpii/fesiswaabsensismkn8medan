@@ -1,0 +1,1422 @@
+"import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:boxicons/boxicons.dart';
+import '../../../config/app_colors.dart';
+
+// ═══════════════════════════════════════════════════════════
+// SECTION AKSI CEPAT — Dengan spacing bottom
+// ═══════════════════════════════════════════════════════════
+class SectionAksiCepat extends StatelessWidget {
+  const SectionAksiCepat({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── Header Section ─────────────────────────────────
+        Row(
+          children: [
+            Icon(FeatherIcons.zap, size: 16, color: AppColors.accent),
+            const SizedBox(width: 6),
+            Text(
+              'Aksi Cepat',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+        // ── Grid dengan offset top ─────────────────────────
+        Transform.translate(
+          offset: const Offset(0, 20), // Top offset sudah diset
+          child: const AksiCepatGrid(),
+        ),
+        // ── JARAK BOTTOM ───────────────────────────────────
+        const SizedBox(height: 16), // ← Tambahkan ini untuk jarak ke bawah
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// AKSI CEPAT GRID
+// ═══════════════════════════════════════════════════════════
+class AksiCepatGrid extends StatelessWidget {
+  const AksiCepatGrid({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      {
+        'label': 'Absensi',
+        'ikon': Boxicons.bxs_camera,
+        'warna': AppColors.accent,
+        'bg': const Color(0xFFEFF6FF),
+      },
+      {
+        'label': 'Izin',
+        'ikon': FeatherIcons.fileText,
+        'warna': const Color(0xFF7C3AED),
+        'bg': const Color(0xFFF5F3FF),
+      },
+      {
+        'label': 'Jadwal',
+        'ikon': FeatherIcons.calendar,
+        'warna': const Color(0xFF0891B2),
+        'bg': const Color(0xFFECFEFF),
+      },
+      {
+        'label': 'Nilai',
+        'ikon': Boxicons.bx_award,
+        'warna': const Color(0xFF16A34A),
+        'bg': const Color(0xFFF0FDF4),
+      },
+      {
+        'label': 'Mail',
+        'ikon': MdiIcons.gmail,
+        'warna': const Color(0xFFF59E0B),
+        'bg': const Color(0xFFFFFBEB),
+      },
+      {
+        'label': 'Tabungan',
+        'ikon': Boxicons.bx_wallet,
+        'warna': const Color(0xFFDC2626),
+        'bg': const Color(0xFFFEF2F2),
+      },
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.25,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final item = items[i];
+        return AksiCepatItem(
+          label: item['label'] as String,
+          ikon: item['ikon'] as IconData,
+          warna: item['warna'] as Color,
+          bg: item['bg'] as Color,
+        );
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// AKSI CEPAT ITEM
+// ═══════════════════════════════════════════════════════════
+class AksiCepatItem extends StatelessWidget {
+  final String label;
+  final IconData ikon;
+  final Color warna;
+  final Color bg;
+
+  const AksiCepatItem({
+    super.key,
+    required this.label,
+    required this.ikon,
+    required this.warna,
+    required this.bg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {},
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: warna.withValues(alpha: 0.15), width: 1),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: warna.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(ikon, color: warna, size: 20),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}" aksi_cepat.dart, "import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:boxicons/boxicons.dart';
+import '../../config/app_colors.dart';
+
+// ═══════════════════════════════════════════════════════════
+// APP FOOTER — Bottom Navigation Bar
+// ═══════════════════════════════════════════════════════════
+class AppFooter extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const AppFooter({
+    super.key,
+    required this.currentIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _NavItem(ikon: FeatherIcons.home, ikonAktif: Boxicons.bxs_home, label: 'Home'),
+      _NavItem(ikon: MdiIcons.gmail, ikonAktif: MdiIcons.gmail, label: 'Mail'),
+      _NavItem(ikon: Boxicons.bx_camera, ikonAktif: Boxicons.bxs_camera, label: 'Absensi', isAbsensi: true),
+      _NavItem(ikon: FeatherIcons.fileText, ikonAktif: Boxicons.bxs_file, label: 'Izin'),
+      _NavItem(ikon: FeatherIcons.user, ikonAktif: Boxicons.bxs_user, label: 'Profil'),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: const Border(
+          top: BorderSide(color: AppColors.border, width: 1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.06),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 72,
+          child: Row(
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              final isActive = i == currentIndex;
+
+              if (item.isAbsensi) {
+                return _AbsensiButton(
+                  isActive: isActive,
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    onTap(i);
+                  },
+                );
+              }
+
+              return _NavButton(
+                item: item,
+                isActive: isActive,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  onTap(i);
+                },
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Nav Item Model
+// ─────────────────────────────────────────────────────────
+class _NavItem {
+  final IconData ikon;
+  final IconData ikonAktif;
+  final String label;
+  final bool isAbsensi;
+
+  const _NavItem({
+    required this.ikon,
+    required this.ikonAktif,
+    required this.label,
+    this.isAbsensi = false,
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// Nav Button Normal
+// ─────────────────────────────────────────────────────────
+class _NavButton extends StatefulWidget {
+  final _NavItem item;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _NavButton({
+    required this.item,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _labelAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _scaleAnim = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack),
+    );
+    _labelAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+
+    if (widget.isActive) _ctrl.forward();
+  }
+
+  @override
+  void didUpdateWidget(_NavButton old) {
+    super.didUpdateWidget(old);
+    if (widget.isActive != old.isActive) {
+      if (widget.isActive) {
+        _ctrl.forward();
+      } else {
+        _ctrl.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (_, __) {
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Ikon dengan animasi scale + background pill
+                Transform.scale(
+                  scale: _scaleAnim.value,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: widget.isActive
+                          ? AppColors.accent.withOpacity(0.1)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Icon(
+                      widget.isActive
+                          ? widget.item.ikonAktif
+                          : widget.item.ikon,
+                      size: 20,
+                      color: widget.isActive
+                          ? AppColors.accent
+                          : AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+
+                // Label dengan fade in
+                Opacity(
+                  opacity: widget.isActive ? 1.0 : 0.5,
+                  child: Text(
+                    widget.item.label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      fontWeight: widget.isActive
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: widget.isActive
+                          ? AppColors.accent
+                          : AppColors.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Absensi Button — Spesial (tengah, menonjol ke atas)
+// ─────────────────────────────────────────────────────────
+class _AbsensiButton extends StatefulWidget {
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _AbsensiButton({required this.isActive, required this.onTap});
+
+  @override
+  State<_AbsensiButton> createState() => _AbsensiButtonState();
+}
+
+class _AbsensiButtonState extends State<_AbsensiButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: OverflowBox(
+          maxHeight: 120,
+          alignment: Alignment.bottomCenter,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Transform translate untuk mengangkat button ke atas
+              Transform.translate(
+                offset: const Offset(0, -16),
+                child: AnimatedBuilder(
+                  animation: _pulseAnim,
+                  builder: (_, child) => Transform.scale(
+                    scale: widget.isActive ? _pulseAnim.value : 1.0,
+                    child: child,
+                  ),
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          const Color(0xFF1D4ED8),
+                          const Color(0xFF1E40AF),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accent.withOpacity(0.5),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                        BoxShadow(
+                          color: AppColors.accent.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                    ),
+                    child: const Icon(
+                      Boxicons.bx_camera,
+                      size: 26,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              // Label dengan Transform.translate untuk naik ke atas (lebih dekat ke button)
+              Transform.translate(
+                offset: const Offset(0, -4), // Naik 4 pixel ke atas
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                  decoration: BoxDecoration(
+                    color: widget.isActive 
+                        ? AppColors.accent.withOpacity(0.1) 
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Absensi',
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: widget.isActive
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}" footer.dart, "import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'absensi/absensi_models.dart';
+import 'absensi/absensi_header.dart';
+import 'absensi/absensi_map_card.dart';
+import 'absensi/absensi_action_button.dart';
+import 'absensi/absensi_status_card.dart';
+import 'absensi/absensi_history_tile.dart';
+
+// ═══════════════════════════════════════════════════════════
+// ABSENSI SCREEN — Root / Wadah Utama
+// Header modern + Map Card + Action Button + Status + History
+// Background: Network Mesh Abstrak (sama dengan home.dart)
+// ═══════════════════════════════════════════════════════════
+
+class AbsensiScreen extends StatefulWidget {
+  const AbsensiScreen({super.key});
+
+  @override
+  State<AbsensiScreen> createState() => _AbsensiScreenState();
+}
+
+class _AbsensiScreenState extends State<AbsensiScreen>
+    with TickerProviderStateMixin {
+  // ── State ────────────────────────────────────────────────
+  StatusAbsensi _statusHariIni = StatusAbsensi.belumAbsen;
+  bool _sedangMemproses = false;
+  // _riwayat = buatDummyRiwayat();
+
+  late AnimationController _pulseController;
+  late AnimationController _slideController;
+  late Animation<double> _pulseAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    // _riwayat = buatDummyRiwayat();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
+
+    _pulseAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _slideController.dispose();
+    super.dispose();
+  }
+
+  // ── Actions ──────────────────────────────────────────────
+  Future<void> _lakukanAbsensi() async {
+    HapticFeedback.mediumImpact();
+    setState(() => _sedangMemproses = true);
+    await Future.delayed(const Duration(seconds: 2));
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _sedangMemproses = false;
+      if (_statusHariIni == StatusAbsensi.belumAbsen) {
+        _statusHariIni = StatusAbsensi.sudahMasuk;
+      } else if (_statusHariIni == StatusAbsensi.sudahMasuk) {
+        _statusHariIni = StatusAbsensi.sudahPulang;
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════════
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F6FF), // UPDATE: sama dengan home.dart
+      body: Stack(
+        children: [
+          // ═══════════════════════════════════════════════════
+          // BACKGROUND NETWORK MESH ABSTRAK (BARU)
+          // ═══════════════════════════════════════════════════
+          Positioned.fill(
+            child: CustomPaint(painter: AbsensiNetworkGridPainter()),
+          ),
+
+          // ── Content ──────────────────────────────────────
+          SafeArea(
+            child: SlideTransition(
+              position: _slideAnim,
+              child: FadeTransition(
+                opacity: _slideController,
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    // ── Header ───────────────────────────────
+                    SliverToBoxAdapter(
+                      child: AbsensiHeader(statusHariIni: _statusHariIni),
+                    ),
+
+                    // ── Status Card ──────────────────────────
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                        child: AbsensiStatusCard(status: _statusHariIni),
+                      ),
+                    ),
+
+                    // ── Map Card ─────────────────────────────
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        child: AbsensiMapCard(statusHariIni: _statusHariIni),
+                      ),
+                    ),
+
+                    // ── Action Button ────────────────────────
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                        child: AbsensiActionButton(
+                          status: _statusHariIni,
+                          sedangMemproses: _sedangMemproses,
+                          pulseAnim: _pulseAnim,
+                          onPressed: _statusHariIni != StatusAbsensi.sudahPulang
+                              ? _lakukanAbsensi
+                              : null,
+                        ),
+                      ),
+                    ),
+
+                    // ── History Section ──────────────────────
+                    SliverToBoxAdapter(
+                      child: const AbsensiHistorySection(),
+                    ),
+
+                    // ── Bottom Padding ───────────────────────
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PAINTER: Network Mesh Abstrak (SAMA PERSIS HOME.DART)
+// ═══════════════════════════════════════════════════════════
+
+class AbsensiNetworkGridPainter extends CustomPainter {
+  static final _rng = math.Random(7);
+  static List<Offset>? _nodes;
+
+  static List<Offset> _buildNodes(Size size) {
+    if (_nodes != null) return _nodes!;
+    final list = <Offset>[];
+    const cols = 8;
+    const rows = 18;
+    final dx = size.width / (cols - 1);
+    final dy = size.height / (rows - 1);
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        final x = c * dx + (_rng.nextDouble() - 0.5) * dx * 0.55;
+        final y = r * dy + (_rng.nextDouble() - 0.5) * dy * 0.55;
+        list.add(Offset(
+            x.clamp(0, size.width), y.clamp(0, size.height)));
+      }
+    }
+    _nodes = list;
+    return list;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final nodes = _buildNodes(size);
+    final linePaint = Paint()
+      ..strokeWidth = 0.9
+      ..style = PaintingStyle.stroke;
+
+    // Gambar garis antar node yang dekat (mesh network)
+    for (int i = 0; i < nodes.length; i++) {
+      for (int j = i + 1; j < nodes.length; j++) {
+        final dist = (nodes[i] - nodes[j]).distance;
+        if (dist < 110) {
+          final opacity = (1 - dist / 110) * 0.16;
+          linePaint.color = const Color(0xFF2563EB).withOpacity(opacity);
+          canvas.drawLine(nodes[i], nodes[j], linePaint);
+        }
+      }
+    }
+
+    // Gambar node/dot
+    for (int i = 0; i < nodes.length; i++) {
+      final isBig = i % 9 == 0;
+      final isAccent = i % 19 == 0;
+      
+      // Glow effect untuk node tertentu
+      if (isAccent) {
+        canvas.drawCircle(
+          nodes[i],
+          8,
+          Paint()
+            ..color = const Color(0xFF3B82F6).withOpacity(0.07)
+            ..style = PaintingStyle.fill,
+        );
+      }
+      
+      // Node utama
+      canvas.drawCircle(
+        nodes[i],
+        isBig ? 3.5 : 1.8,
+        Paint()
+          ..color = isBig
+              ? const Color(0xFF2563EB).withOpacity(0.22)
+              : const Color(0xFF93C5FD).withOpacity(0.45)
+          ..style = PaintingStyle.fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(AbsensiNetworkGridPainter old) => false;
+}" absensi.dart, "// lib/screens/content/home.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:boxicons/boxicons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../config/app_colors.dart';
+import '../../../services/student_service.dart';
+import '../../../services/student_data_cache.dart';
+import 'header.dart';
+import 'home/hero.dart';
+import 'home/aksi_cepat.dart';
+import 'home/event.dart';
+import 'home/jadwal.dart';
+import 'home/pengumuman.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  // ── Controllers ────────────────────────────────────────
+  final ScrollController _scrollController = ScrollController();
+  final PageController _eventController = PageController();
+  late AnimationController _waveController;
+
+  // ── Event carousel ─────────────────────────────────────
+  int _currentEvent = 0;
+  Timer? _autoScrollTimer;
+  bool _isUserInteracting = false;
+
+  // ── Data state ─────────────────────────────────────────
+  // 🔥 _isLoading hanya TRUE saat belum ada cache sama sekali
+  bool _isLoading = false;
+  String _namaLengkap = '';
+  String? _photoUrl;
+  UserRole _role = UserRole.siswa;
+  List<Map<String, dynamic>> _jadwalHariIni = [];
+
+  // ── Konstanta ──────────────────────────────────────────
+  static const double _headerHeight = 140;
+  final int _jumlahNotifikasi = 3;
+
+  // ── Data statis ────────────────────────────────────────
+  final List<Map<String, dynamic>> _events = [
+    {
+      'judul': 'Peringatan Hari Pendidikan Nasional',
+      'tanggal': '2 Mei 2025',
+      'kategori': 'Nasional',
+      'warna': AppColors.accent,
+      'gambar':
+          'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800&q=80',
+    },
+    {
+      'judul': 'Lomba Kompetensi Siswa (LKS) SMK 2025',
+      'tanggal': '15 Mei 2025',
+      'kategori': 'Kompetisi',
+      'warna': Color(0xFF7C3AED),
+      'gambar':
+          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80',
+    },
+    {
+      'judul': 'Kunjungan Industri ke PT. Pertamina',
+      'tanggal': '22 Mei 2025',
+      'kategori': 'Industri',
+      'warna': Color(0xFF0891B2),
+      'gambar':
+          'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80',
+    },
+    {
+      'judul': 'Ujian Akhir Semester Genap 2024/2025',
+      'tanggal': '3–14 Juni 2025',
+      'kategori': 'Akademik',
+      'warna': Color(0xFF16A34A),
+      'gambar':
+          'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=800&q=80',
+    },
+  ];
+
+  List<Map<String, dynamic>> get _loopEvents => [..._events, _events.first];
+
+  // final List<Map<String, dynamic>> _pengumuman = [
+  //   {
+  //     'judul': 'Pengumpulan Tugas Akhir Semester',
+  //     'isi':
+  //         'Batas pengumpulan tugas akhir semester adalah tanggal 30 Mei 2025. Pastikan semua tugas dikumpulkan tepat waktu.',
+  //     'waktu': '2 jam lalu',
+  //     'icon': FeatherIcons.fileText,
+  //     'warna': AppColors.accent,
+  //   },
+  //   {
+  //     'judul': 'Jadwal Piket Kelas Diperbarui',
+  //     'isi':
+  //         'Jadwal piket kelas telah diperbarui untuk semester genap. Silakan cek papan pengumuman di kelas masing-masing.',
+  //     'waktu': '1 hari lalu',
+  //     'icon': FeatherIcons.clipboard,
+  //     'warna': Color(0xFF7C3AED),
+  //   },
+  //   {
+  //     'judul': 'Pembayaran SPP Bulan Mei',
+  //     'isi':
+  //         'Harap segera melakukan pembayaran SPP bulan Mei sebelum tanggal 10. Keterlambatan dikenakan denda administrasi.',
+  //     'waktu': '2 hari lalu',
+  //     'icon': Boxicons.bx_wallet,
+  //     'warna': Color(0xFFF59E0B),
+  //   },
+  //   {
+  //     'judul': 'Peraturan Seragam Sekolah Baru',
+  //     'isi':
+  //         'Mulai 1 Juni 2025 berlaku peraturan seragam baru. Setiap siswa wajib mengenakan seragam lengkap sesuai ketentuan.',
+  //     'waktu': '3 hari lalu',
+  //     'icon': FeatherIcons.alertCircle,
+  //     'warna': Color(0xFF0891B2),
+  //   },
+  //   {
+  //     'judul': 'Pendaftaran Ekstrakurikuler Dibuka',
+  //     'isi':
+  //         'Pendaftaran ekstrakurikuler semester genap resmi dibuka. Segera daftarkan diri sebelum kuota penuh.',
+  //     'waktu': '4 hari lalu',
+  //     'icon': FeatherIcons.star,
+  //     'warna': Color(0xFF16A34A),
+  //   },
+  //   {
+  //     'judul': 'Libur Hari Raya Waisak',
+  //     'isi':
+  //         'Sekolah libur pada tanggal 12 Mei 2025 dalam rangka peringatan Hari Raya Waisak. Kegiatan belajar dimulai kembali 13 Mei.',
+  //     'waktu': '5 hari lalu',
+  //     'icon': Boxicons.bx_calendar_event,
+  //     'warna': Color(0xFFDC2626),
+  //   },
+  // ];
+
+  // ═══════════════════════════════════════════════════════
+  // LIFECYCLE
+  // ═══════════════════════════════════════════════════════
+
+  @override
+  void initState() {
+    super.initState();
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+
+    final cache = StudentDataCache.instance;
+
+    if (cache.isLoaded) {
+      // ✅ Data sudah ada di cache → langsung tampil, TANPA loading
+      _namaLengkap   = cache.namaLengkap;
+      _photoUrl      = cache.photoUrl;
+      _jadwalHariIni = cache.jadwalHariIni;
+      _isLoading     = false;
+
+      // Carousel langsung start karena tidak ada loading
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startAutoScroll();
+      });
+    } else {
+      // 🔄 Belum ada cache → fetch dari API
+      _isLoading = true;
+      _loadStudentData();
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _scrollController.dispose();
+    _eventController.dispose();
+    _waveController.dispose();
+    super.dispose();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // FETCH DATA (hanya dipanggil sekali saat belum ada cache)
+  // ═══════════════════════════════════════════════════════
+
+  Future<void> _loadStudentData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final login =
+          prefs.getString('login') ?? prefs.getString('identifier') ?? '';
+
+      debugPrint('🔍 [Home] login key: "$login"');
+
+      if (login.isEmpty) {
+        debugPrint('⚠️ [Home] login kosong di prefs!');
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _startAutoScroll();
+        }
+        return;
+      }
+
+      final raw = await StudentService.getStudentData(login);
+
+      debugPrint(
+          '📦 [Home] keys: ${raw.keys.toList()} | status: ${raw['status']}');
+
+      if (!mounted) return;
+
+      if (raw['message'] == 'Unauthenticated.') {
+        debugPrint('❌ [Home] Token expired atau tidak valid!');
+        setState(() => _isLoading = false);
+        _startAutoScroll();
+        return;
+      }
+
+      final user    = StudentService.extractUser(raw);
+      final student = StudentService.extractStudent(raw);
+      final sched   = StudentService.extractTodaySchedule(raw);
+
+      debugPrint('👤 [Home] user.name: ${user['name']}');
+      debugPrint('🎓 [Home] student.name: ${student['name']}');
+      debugPrint('📅 [Home] today_schedule: ${sched.length} item → $sched');
+
+      final nama = _val(student['name']) ?? _val(user['name']) ?? 'Pengguna';
+      final foto = _val(student['photo']) ?? _val(user['photo']);
+
+      debugPrint('✅ [Home] Nama: "$nama" | Foto: $foto');
+
+      final jadwal = _buildJadwal(sched);
+      debugPrint('📋 [Home] Jadwal: ${jadwal.length} item');
+
+      // 🔥 Simpan ke cache supaya pindah tab tidak fetch ulang
+      final cache         = StudentDataCache.instance;
+      cache.isLoaded      = true;
+      cache.namaLengkap   = nama;
+      cache.photoUrl      = foto;
+      cache.jadwalHariIni = jadwal;
+      cache.rawData       = raw;
+
+      setState(() {
+        _namaLengkap   = nama;
+        _photoUrl      = foto;
+        _role          = UserRole.siswa;
+        _jadwalHariIni = jadwal;
+        _isLoading     = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startAutoScroll();
+      });
+    } catch (e, st) {
+      debugPrint('❌ [Home] Exception: $e\n$st');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _startAutoScroll();
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // HELPERS
+  // ═══════════════════════════════════════════════════════
+
+  String? _val(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  List<Map<String, dynamic>> _buildJadwal(
+      List<Map<String, dynamic>> list) {
+    if (list.isEmpty) return [];
+
+    final sorted = List<Map<String, dynamic>>.from(list);
+    sorted.sort((a, b) =>
+        ((a['jam_masuk'] as String?) ?? '')
+            .compareTo((b['jam_masuk'] as String?) ?? ''));
+
+    final now    = TimeOfDay.now();
+    final nowMin = now.hour * 60 + now.minute;
+
+    return sorted.map((s) {
+      final module  = _val(s['module'])  ?? '-';
+      final teacher = _val(s['teacher']) ?? '-';
+      final rawIn   = (s['jam_masuk']   as String?) ?? '00:00:00';
+      final rawOut  = (s['jam_selesai'] as String?) ?? '00:00:00';
+      final inMin   = _mnt(rawIn);
+      final outMin  = _mnt(rawOut);
+
+      final String status;
+      if (nowMin > outMin) {
+        status = 'selesai';
+      } else if (nowMin >= inMin) {
+        status = 'aktif';
+      } else {
+        status = 'akan datang';
+      }
+
+      return <String, dynamic>{
+        'mapel'  : module,
+        'guru'   : teacher,
+        'jam'    : '${_fmt(rawIn)} – ${_fmt(rawOut)}',
+        'ruang'  : '-',
+        'status' : status,
+        'icon'   : _moduleIcon(module),
+      };
+    }).toList();
+  }
+
+  int _mnt(String raw) {
+    final p = raw.split(':');
+    if (p.length < 2) return 0;
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+  }
+
+  String _fmt(String raw) {
+    final p = raw.split(':');
+    return p.length >= 2 ? '${p[0]}:${p[1]}' : raw;
+  }
+
+  IconData _moduleIcon(String name) {
+    final l = name.toLowerCase();
+    if (l.contains('agama')    || l.contains('religi')   ||
+        l.contains('kristen')  || l.contains('islam')    ||
+        l.contains('katholik') || l.contains('hindu')    ||
+        l.contains('budha'))    return Boxicons.bx_book_heart;
+    if (l.contains('matematika') || l.contains('math'))
+                                    return FeatherIcons.hash;
+    if (l.contains('bahasa') && l.contains('inggris'))
+                                    return FeatherIcons.globe;
+    if (l.contains('bahasa'))       return FeatherIcons.bookOpen;
+    if (l.contains('komputer')  || l.contains('pemrograman') ||
+        l.contains('coding')    || l.contains('tik') ||
+        l.contains('rpl')       || l.contains('ddk') ||
+        l.contains('tkkr')      || l.contains('software'))
+                                    return Boxicons.bx_code_alt;
+    if (l.contains('basis data') || l.contains('database'))
+                                    return Boxicons.bx_data;
+    if (l.contains('jaringan')  || l.contains('network'))
+                                    return Boxicons.bx_network_chart;
+    if (l.contains('fisika'))       return FeatherIcons.zap;
+    if (l.contains('kimia'))        return FeatherIcons.droplet;
+    if (l.contains('biologi'))      return FeatherIcons.feather;
+    if (l.contains('sejarah')   || l.contains('pkn'))
+                                    return FeatherIcons.flag;
+    if (l.contains('olahraga')  || l.contains('penjas') ||
+        l.contains('pjok'))         return FeatherIcons.activity;
+    if (l.contains('seni')      || l.contains('budaya'))
+                                    return FeatherIcons.penTool;
+    if (l.contains('perhotelan') || l.contains('hotel'))
+                                    return Boxicons.bx_building_house;
+    if (l.contains('kecantikan'))   return Boxicons.bx_spa;
+    if (l.contains('kejuruan')  || l.contains('produktif'))
+                                    return Boxicons.bx_briefcase;
+    if (l.contains('pkwu')      || l.contains('kewirausahaan'))
+                                    return Boxicons.bx_store;
+    return FeatherIcons.bookOpen;
+  }
+
+  // ── Auto scroll ────────────────────────────────────────
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer =
+        Timer.periodic(const Duration(milliseconds: 3000), (_) {
+      if (!mounted || _isUserInteracting) return;
+      if (!_eventController.hasClients) return;
+
+      final next = _currentEvent + 1;
+      if (next >= _loopEvents.length) {
+        _eventController.jumpToPage(0);
+        if (mounted) setState(() => _currentEvent = 0);
+      } else {
+        _eventController.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  void _onNotifikasiTap(BuildContext ctx) {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+      content: const Text('Notifikasi',
+          style: TextStyle(fontFamily: 'Poppins')),
+      backgroundColor: AppColors.primary,
+      behavior: SnackBarBehavior.floating,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
+  void _onProfilTap() => HapticFeedback.lightImpact();
+
+  // ═══════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F6FF),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(painter: LightNetworkGridPainter()),
+          ),
+          if (_isLoading) _buildLoading(),
+          if (!_isLoading) _buildContent(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoading() => Positioned.fill(
+        child: Container(
+          color: const Color(0xFFF0F6FF),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppColors.accent,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Memuat data...',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Widget _buildContent() => CustomScrollView(
+        controller: _scrollController,
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // ── HEADER ───────────────────────────────────
+          SliverPersistentHeader(
+            delegate: SliverHeaderDelegate(
+              headerHeight: _headerHeight,
+              namaLengkap:
+                  _namaLengkap.isNotEmpty ? _namaLengkap : 'Pengguna',
+              photoUrl: _photoUrl,
+              role: _role,
+              jumlahNotifikasi: _jumlahNotifikasi,
+              onNotifikasiTap: () => _onNotifikasiTap(context),
+              onProfilTap: _onProfilTap,
+            ),
+            pinned: false,
+            floating: false,
+          ),
+
+          // ── BODY ─────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                HeroAbstrak(waveController: _waveController),
+                const SizedBox(height: 20),
+
+                _Pad(child: const SectionAksiCepat()),
+                const SizedBox(height: 24),
+
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Pad(
+                      child: _SectionHeader(
+                        judul: 'Event Sekolah',
+                        ikon: FeatherIcons.calendar,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    NotificationListener<ScrollNotification>(
+                      onNotification: (n) {
+                        if (n is ScrollStartNotification) {
+                          setState(() => _isUserInteracting = true);
+                        } else if (n is ScrollEndNotification) {
+                          Future.delayed(
+                            const Duration(milliseconds: 500),
+                            () {
+                              if (mounted) {
+                                setState(
+                                    () => _isUserInteracting = false);
+                              }
+                            },
+                          );
+                        }
+                        return false;
+                      },
+                      child: KarouselEvent(
+                        controller: _eventController,
+                        currentIndex: _currentEvent,
+                        onPageChanged: (i) {
+                          setState(() {
+                            _currentEvent = i;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                _Pad(
+                  child: _jadwalHariIni.isEmpty
+                      ? const _JadwalKosong()
+                      : SectionJadwal(jadwal: _jadwalHariIni),
+                ),
+                const SizedBox(height: 24),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: const SectionPengumuman(),
+                ),
+                const SizedBox(height: 100),
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+// ═══════════════════════════════════════════════════════════
+// WIDGET: Jadwal kosong
+// ═══════════════════════════════════════════════════════════
+
+class _JadwalKosong extends StatelessWidget {
+  const _JadwalKosong();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(FeatherIcons.clock, size: 16, color: AppColors.accent),
+            const SizedBox(width: 6),
+            Text(
+              'Jadwal Hari Ini',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding:
+              const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                FeatherIcons.coffee,
+                size: 30,
+                color: AppColors.textMuted.withOpacity(0.35),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tidak ada jadwal hari ini',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+
+class _Pad extends StatelessWidget {
+  final Widget child;
+  const _Pad({required this.child});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: child,
+      );
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String judul;
+  final IconData ikon;
+  final String? aksi;
+  final VoidCallback? onAksi;
+
+  const _SectionHeader({
+    required this.judul,
+    required this.ikon,
+    this.aksi,
+    this.onAksi,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(ikon, size: 16, color: AppColors.accent),
+            const SizedBox(width: 6),
+            Text(
+              judul,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+        if (aksi != null)
+          GestureDetector(
+            onTap: onAksi,
+            child: Text(
+              aksi!,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: AppColors.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}" home.dart

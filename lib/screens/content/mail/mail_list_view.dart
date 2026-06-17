@@ -2,32 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
-import '../../../config/app_colors.dart';
 import 'mail_models.dart';
 import 'mail_helpers.dart';
 
 // ═══════════════════════════════════════════════════════════
-// MAIL LIST VIEW — Inbox daftar pesan
+// MAIL LIST VIEW — Inbox daftar percakapan izin (realtime)
 // ═══════════════════════════════════════════════════════════
 
-const int _kTampilAwal = 4;
-
 class MailListView extends StatefulWidget {
-  final List<MailMessage> pesanTersaring;
-  final int jumlahBelumDibaca;
-  final int tabIndex;
-  final TextEditingController searchCtrl;
-  final void Function(int) onTabChanged;
-  final void Function(MailMessage) onBukaPesan;
-  final void Function(MailMessage) onHapusPesan;
+  final List<IzinModel> izins;
+  final bool isLoading;
+  final VoidCallback onRefresh;
+  final void Function(IzinModel) onBukaPesan;
+  final void Function(IzinModel) onHapusPesan;
 
   const MailListView({
     super.key,
-    required this.pesanTersaring,
-    required this.jumlahBelumDibaca,
-    required this.tabIndex,
-    required this.searchCtrl,
-    required this.onTabChanged,
+    required this.izins,
+    required this.isLoading,
+    required this.onRefresh,
     required this.onBukaPesan,
     required this.onHapusPesan,
   });
@@ -37,47 +30,78 @@ class MailListView extends StatefulWidget {
 }
 
 class _MailListViewState extends State<MailListView> {
-  bool _tampilSemua = false;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+  int _tabIndex = 0; // 0=semua, 1=unread, 2=disetujui
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      setState(() => _query = _searchCtrl.text.toLowerCase());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<IzinModel> get _filtered {
+    List<IzinModel> hasil = widget.izins;
+
+    if (_tabIndex == 1) {
+      hasil = hasil.where((z) => z.unreadCount > 0).toList();
+    } else if (_tabIndex == 2) {
+      hasil = hasil.where((z) => z.status == IzinStatus.disetujui).toList();
+    }
+
+    if (_query.isNotEmpty) {
+      hasil = hasil.where((z) =>
+          z.keterangan.toLowerCase().contains(_query) ||
+          z.jenisLabel.toLowerCase().contains(_query) ||
+          z.statusLabel.toLowerCase().contains(_query) ||
+          (z.lastPesan?.pesan.toLowerCase().contains(_query) ?? false)).toList();
+    }
+
+    return hasil;
+  }
+
+  int get _totalUnread => widget.izins.fold(0, (sum, z) => sum + z.unreadCount);
 
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.pesanTersaring;
-    final tampil = (!_tampilSemua && filtered.length > _kTampilAwal)
-        ? filtered.take(_kTampilAwal).toList()
-        : filtered;
-    final adaLebih = filtered.length > _kTampilAwal && !_tampilSemua;
-
     return Column(
       children: [
-        _MailListHeader(
-          jumlahBelumDibaca: widget.jumlahBelumDibaca,
-          tabIndex: widget.tabIndex,
-          searchCtrl: widget.searchCtrl,
-          onTabChanged: widget.onTabChanged,
+        _ListHeader(
+          totalUnread: _totalUnread,
+          tabIndex: _tabIndex,
+          searchCtrl: _searchCtrl,
+          onTabChanged: (i) => setState(() => _tabIndex = i),
+          onRefresh: widget.onRefresh,
         ),
         Expanded(
-          child: filtered.isEmpty
-              ? const _MailKosong()
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: tampil.length + (adaLebih ? 1 : 0),
-                  separatorBuilder: (_, __) => const SizedBox(height: 9),
-                  itemBuilder: (_, i) {
-                    if (i < tampil.length) {
-                      return _MailCard(
-                        mail: tampil[i],
-                        onTap: widget.onBukaPesan,
-                        onHapus: widget.onHapusPesan,
-                      );
-                    }
-                    // Tombol tampilkan semua
-                    return _TampilSemuaButton(
-                      sisaCount: filtered.length - _kTampilAwal,
-                      onTap: () => setState(() => _tampilSemua = true),
-                    );
-                  },
-                ),
+          child: widget.isLoading
+              ? const _LoadingShimmer()
+              : _filtered.isEmpty
+                  ? _EmptyState(query: _query)
+                  : RefreshIndicator(
+                      onRefresh: () async => widget.onRefresh(),
+                      color: kMailBiru,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 32),
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        itemCount: _filtered.length,
+                        itemBuilder: (_, i) => _IzinCard(
+                          izin: _filtered[i],
+                          onTap: widget.onBukaPesan,
+                          onLongPress: widget.onHapusPesan,
+                        ),
+                      ),
+                    ),
         ),
       ],
     );
@@ -85,102 +109,102 @@ class _MailListViewState extends State<MailListView> {
 }
 
 // ── Header ────────────────────────────────────────────────
-class _MailListHeader extends StatelessWidget {
-  final int jumlahBelumDibaca;
+class _ListHeader extends StatelessWidget {
+  final int totalUnread;
   final int tabIndex;
   final TextEditingController searchCtrl;
   final void Function(int) onTabChanged;
+  final VoidCallback onRefresh;
 
-  const _MailListHeader({
-    required this.jumlahBelumDibaca,
+  const _ListHeader({
+    required this.totalUnread,
     required this.tabIndex,
     required this.searchCtrl,
     required this.onTabChanged,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: kMailSurface,
       child: SafeArea(
         bottom: false,
         child: Column(
           children: [
-          Padding(
-  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-  child: Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Kotak Masuk',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              letterSpacing: -0.5,
-            ),
-          ),
-          if (jumlahBelumDibaca > 0)
-            Text(
-              '$jumlahBelumDibaca belum dibaca',
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: AppColors.accent,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mail Izin',
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: kMailTextPrimary,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                        if (totalUnread > 0)
+                          Text(
+                            '$totalUnread pesan belum dibaca',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: kMailBiru,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Semua pesan sudah dibaca',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: kMailTextMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: onRefresh,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: kMailBiruMuda,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kMailBiruBorder, width: 0.8),
+                      ),
+                      child: const Icon(
+                        FeatherIcons.refreshCw,
+                        size: 16,
+                        color: kMailBiru,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
-      ),
-      // Settings/Filter button
-      GestureDetector(
-        onTap: () {},
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.border,
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.accent.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Icon(
-            FeatherIcons.sliders,
-            size: 17,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ),
-    ],
-  ),
-),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _SearchBar(controller: searchCtrl),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: _SearchBox(controller: searchCtrl),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _TabBar(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: _Tabs(
                 tabIndex: tabIndex,
-                jumlahBelumDibaca: jumlahBelumDibaca,
-                onTabChanged: onTabChanged,
+                unreadCount: totalUnread,
+                onChanged: onTabChanged,
               ),
             ),
-            const SizedBox(height: 12),
-            Container(height: 0.5, color: kMailBorder),
+            const SizedBox(height: 10),
+            const Divider(height: 1, thickness: 0.5, color: Color(0xFFE2E8F0)),
           ],
         ),
       ),
@@ -188,154 +212,151 @@ class _MailListHeader extends StatelessWidget {
   }
 }
 
-// ── Search Bar ────────────────────────────────────────────
-class _SearchBar extends StatelessWidget {
+// ── Search Box ────────────────────────────────────────────
+class _SearchBox extends StatelessWidget {
   final TextEditingController controller;
 
-  const _SearchBar({required this.controller});
+  const _SearchBox({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextField(
         controller: controller,
-        style: GoogleFonts.poppins(
-          fontSize: 13,
-          color: kMailTextPrimary,
-        ),
+        style: GoogleFonts.poppins(fontSize: 13, color: kMailTextPrimary),
         decoration: InputDecoration(
-          hintText: 'Cari pesan...',
-          hintStyle: GoogleFonts.poppins(
-            fontSize: 13,
-            color: kMailTextMuted,
-          ),
-          prefixIcon: const Icon(
-            FeatherIcons.search,
-            size: 16,
-            color: kMailTextMuted,
-          ),
+          hintText: 'Cari percakapan izin...',
+          hintStyle: GoogleFonts.poppins(fontSize: 12.5, color: kMailTextMuted),
+          prefixIcon: const Icon(FeatherIcons.search, size: 15, color: kMailTextMuted),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 11,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         ),
       ),
     );
   }
 }
 
-// ── Tab Bar ───────────────────────────────────────────────
-class _TabBar extends StatelessWidget {
+// ── Tabs ──────────────────────────────────────────────────
+class _Tabs extends StatelessWidget {
   final int tabIndex;
-  final int jumlahBelumDibaca;
-  final void Function(int) onTabChanged;
+  final int unreadCount;
+  final void Function(int) onChanged;
 
-  const _TabBar({
+  const _Tabs({
     required this.tabIndex,
-    required this.jumlahBelumDibaca,
-    required this.onTabChanged,
+    required this.unreadCount,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final tabs = ['Semua', 'Belum Dibaca'];
-    return Row(
-      children: List.generate(tabs.length, (i) {
-        final aktif = i == tabIndex;
-        return GestureDetector(
-          onTap: () => onTabChanged(i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            margin: EdgeInsets.only(right: i == 0 ? 8 : 0),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-            decoration: BoxDecoration(
-              color: aktif ? kMailBiru : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: aktif ? kMailBiru : const Color(0xFFD1D5DB),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  tabs[i],
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: aktif ? Colors.white : kMailTextSecondary,
-                  ),
+    final labels = ['Semua', 'Belum Baca', 'Disetujui'];
+    return SizedBox(
+      height: 32,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: labels.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 7),
+        itemBuilder: (_, i) {
+          final aktif = i == tabIndex;
+          return GestureDetector(
+            onTap: () => onChanged(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: aktif ? kMailBiru : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: aktif ? kMailBiru : const Color(0xFFCBD5E1),
+                  width: 1,
                 ),
-                if (i == 1 && jumlahBelumDibaca > 0) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 1,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    labels[i],
+                    style: GoogleFonts.poppins(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: aktif ? Colors.white : kMailTextSecondary,
                     ),
-                    decoration: BoxDecoration(
-                      color: aktif
-                          ? Colors.white.withOpacity(0.25)
-                          : kMailBiru,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$jumlahBelumDibaca',
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                  ),
+                  if (i == 1 && unreadCount > 0) ...[
+                    const SizedBox(width: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: aktif ? Colors.white.withOpacity(0.28) : kMailBiru,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        },
+      ),
     );
   }
 }
 
-// ── Mail Card ─────────────────────────────────────────────
-class _MailCard extends StatelessWidget {
-  final MailMessage mail;
-  final void Function(MailMessage) onTap;
-  final void Function(MailMessage) onHapus;
+// ── Izin Card ─────────────────────────────────────────────
+class _IzinCard extends StatelessWidget {
+  final IzinModel izin;
+  final void Function(IzinModel) onTap;
+  final void Function(IzinModel) onLongPress;
 
-  const _MailCard({
-    required this.mail,
+  const _IzinCard({
+    required this.izin,
     required this.onTap,
-    required this.onHapus,
+    required this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
+    final unread = izin.unreadCount > 0;
+    final lastP = izin.lastPesan;
+
     return GestureDetector(
-      onTap: () => onTap(mail),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap(izin);
+      },
       onLongPress: () {
         HapticFeedback.mediumImpact();
-        onHapus(mail);
+        onLongPress(izin);
       },
       child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: !mail.dibaca ? kMailBiruBorder : kMailBorder,
-            width: !mail.dibaca ? 1 : 0.5,
+            color: unread ? kMailBiruBorder : const Color(0xFFE2E8F0),
+            width: unread ? 1 : 0.6,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: unread
+                  ? kMailBiru.withOpacity(0.06)
+                  : Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -344,99 +365,141 @@ class _MailCard extends StatelessWidget {
           children: [
             // Strip kiri unread
             AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 4,
-              height: 108,
+              duration: const Duration(milliseconds: 250),
+              width: 3.5,
+              height: 88,
               decoration: BoxDecoration(
-                color: !mail.dibaca ? kMailBiru : Colors.transparent,
+                color: unread ? kMailBiru : Colors.transparent,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   bottomLeft: Radius.circular(16),
                 ),
               ),
             ),
+
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 13, 14, 13),
+                padding: const EdgeInsets.fromLTRB(11, 11, 12, 11),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    MailAvatar(inisial: mail.senderInitials, ukuran: 42),
-                    const SizedBox(width: 11),
+                    // Avatar dengan status dot
+                    Stack(
+                      children: [
+                        MailAvatar(
+                          inisial: izin.namaLengkap.isNotEmpty
+                              ? izin.namaLengkap[0].toUpperCase()
+                              : 'S',
+                          ukuran: 42,
+                          // warna: jenisColor(izin.jenisIzin),
+                        ),
+                        if (izin.status == IzinStatus.disetujui)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: kMailSuccess,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: const Icon(Icons.check, size: 8, color: Colors.white),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Konten
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Row 1: nama + waktu
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${izin.jenisLabel} ( ${formatTanggalIzin(izin.tanggalIzin)} )',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12.5,
+                                    fontWeight: unread ? FontWeight.w700 : FontWeight.w600,
+                                    color: kMailTextPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              if (lastP != null)
+                                Text(
+                                  formatWaktuSingkat(lastP.createdAt),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 10,
+                                    color: unread ? kMailBiru : kMailTextMuted,
+                                    fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+
+                          // Row 2: badge status + jenis
+                          Row(
+                            children: [
+                              IzinStatusBadge(status: izin.status, compact: true),
+                              const SizedBox(width: 5),
+                              IzinJenisBadge(jenis: izin.jenisIzin),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+
+                          // Row 3: preview pesan terakhir + unread dot
                           Row(
                             children: [
                               Expanded(
                                 child: Text(
-                                  mail.senderName,
+                                  lastP != null
+                                      ? '${lastP.dariSiswa ? "Kamu: " : "Admin: "}${lastP.pesan}'
+                                      : izin.keterangan,
                                   style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    fontWeight: !mail.dibaca
-                                        ? FontWeight.w700
-                                        : FontWeight.w600,
-                                    color: kMailTextPrimary,
+                                    fontSize: 11,
+                                    color: unread ? kMailTextPrimary : kMailTextMuted,
+                                    fontWeight: unread ? FontWeight.w500 : FontWeight.w400,
                                   ),
+                                  maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                formatWaktuSingkat(mail.waktu),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 10,
-                                  color: !mail.dibaca
-                                      ? kMailBiru
-                                      : kMailTextMuted,
-                                  fontWeight: !mail.dibaca
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
+                              if (unread) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: const BoxDecoration(
+                                    color: kMailBiru,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${izin.unreadCount}',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ),
-                          const SizedBox(height: 4),
-                          MailRoleBadge(label: labelRole(mail.senderRole)),
-                          const SizedBox(height: 5),
-                          Text(
-                            mail.subject,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: !mail.dibaca
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                              color: const Color(0xFF1F2937),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            mail.preview.replaceAll('\n', ' '),
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: kMailTextMuted,
-                              height: 1.4,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    if (!mail.dibaca) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(top: 5),
-                        decoration: const BoxDecoration(
-                          color: kMailBiru,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -448,61 +511,141 @@ class _MailCard extends StatelessWidget {
   }
 }
 
-// ── Tampilkan Semua Button ────────────────────────────────
-class _TampilSemuaButton extends StatelessWidget {
-  final int sisaCount;
-  final VoidCallback onTap;
+// ── Loading Shimmer ───────────────────────────────────────
+class _LoadingShimmer extends StatefulWidget {
+  const _LoadingShimmer();
 
-  const _TampilSemuaButton({
-    required this.sisaCount,
-    required this.onTap,
-  });
+  @override
+  State<_LoadingShimmer> createState() => _LoadingShimmerState();
+}
+
+class _LoadingShimmerState extends State<_LoadingShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(top: 4),
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kMailBiruBorder, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: kMailBiru.withOpacity(0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) {
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 32),
+          itemCount: 5,
+          itemBuilder: (_, __) => Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            height: 90,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(_anim.value + 0.2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 0.5),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(FeatherIcons.mail, size: 14, color: kMailBiru),
-            const SizedBox(width: 8),
-            Text(
-              'Tampilkan $sisaCount pesan lainnya',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: kMailBiru,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  width: 3.5,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Color.lerp(
+                        const Color(0xFFE2E8F0),
+                        const Color(0xFFF1F5F9),
+                        _anim.value,
+                      ),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        height: 12,
+                        width: 160,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(
+                            const Color(0xFFE2E8F0),
+                            const Color(0xFFF1F5F9),
+                            _anim.value,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 10,
+                        width: 100,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(
+                            const Color(0xFFE2E8F0),
+                            const Color(0xFFF1F5F9),
+                            _anim.value,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        height: 10,
+                        width: 200,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(
+                            const Color(0xFFE2E8F0),
+                            const Color(0xFFF1F5F9),
+                            _anim.value,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
             ),
-            const SizedBox(width: 6),
-            const Icon(FeatherIcons.chevronDown, size: 13, color: kMailBiru),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
 // ── Empty State ───────────────────────────────────────────
-class _MailKosong extends StatelessWidget {
-  const _MailKosong();
+class _EmptyState extends StatelessWidget {
+  final String query;
+
+  const _EmptyState({required this.query});
 
   @override
   Widget build(BuildContext context) {
@@ -511,30 +654,33 @@ class _MailKosong extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 68,
-            height: 68,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
-              color: kMailBiruMuda,
-              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                colors: [kMailBiruMuda, Color(0xFFDBEAFE)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(22),
             ),
-            child: const Icon(FeatherIcons.inbox, size: 28, color: kMailBiru),
+            child: const Icon(FeatherIcons.inbox, size: 30, color: kMailBiru),
           ),
           const SizedBox(height: 14),
           Text(
-            'Tidak ada pesan',
+            query.isNotEmpty ? 'Tidak ditemukan' : 'Belum ada pesan',
             style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF1F2937),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: kMailTextPrimary,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 5),
           Text(
-            'Kotak masuk kamu kosong',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: kMailTextMuted,
-            ),
+            query.isNotEmpty
+                ? 'Coba kata kunci lain'
+                : 'Pesan dari admin akan muncul di sini',
+            style: GoogleFonts.poppins(fontSize: 12, color: kMailTextMuted),
           ),
         ],
       ),

@@ -1,12 +1,18 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'absensi_models.dart';
+import 'absensi_camera_modal.dart';
+import 'absensi_barcode_modal.dart';
+import '../../../services/absensi_realtime_service.dart';
 
 // ═══════════════════════════════════════════════════════════
 // ABSENSI ACTION BUTTON — Tombol utama absen (barcode/kamera)
 // Menampilkan 2 opsi: Kamera & Barcode
+// 🔥 REALTIME: Listen stream dari AbsensiRealtimeService
+//    → Auto update status, kunci tombol saat libur
 // ═══════════════════════════════════════════════════════════
 
-class AbsensiActionButton extends StatelessWidget {
+class AbsensiActionButton extends StatefulWidget {
   final StatusAbsensi status;
   final bool sedangMemproses;
   final Animation<double> pulseAnim;
@@ -21,35 +27,121 @@ class AbsensiActionButton extends StatelessWidget {
   });
 
   @override
+  State<AbsensiActionButton> createState() => _AbsensiActionButtonState();
+}
+
+class _AbsensiActionButtonState extends State<AbsensiActionButton> {
+  // 🔥 REALTIME STATE
+  StreamSubscription<AbsensiRealtimeState>? _sub;
+  AbsensiAction _action = AbsensiAction.none;
+  String _statusText = '';
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 🔥 START REALTIME SERVICE
+    AbsensiRealtimeService.start();
+
+    // 🔥 LISTEN STREAM
+    _sub = AbsensiRealtimeService.stream.listen((state) {
+      if (!mounted) return;
+
+      setState(() {
+        _action = state.action;
+        _statusText = state.statusText;
+      });
+
+      print("BUTTON REALTIME:");
+      print(state.statusText);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final selesai = status == StatusAbsensi.sudahPulang;
+    // 🔥 DETEKSI LIBUR
+    final isLibur = _statusText.toLowerCase().contains("libur");
+    // 🔥 TOMBOL DISABLED kalau action = none ATAU libur
+    final tombolDisabled = _action == AbsensiAction.none || isLibur;
+    // 🔥 Status selesai (sudah pulang)
+    final selesai = widget.status == StatusAbsensi.sudahPulang;
 
     return Column(
       children: [
-        // ── Row 2 Tombol: Kamera | Barcode ──────────
+        // ── Row 2 Tombol: Kamera | Barcode ──────────────
         Row(
           children: [
             // Tombol Kamera
             Expanded(
               child: _TombolOpsi(
-                ikon: Icons.camera_alt_rounded,
-                label: 'Kamera',
-                sublabel: 'Foto Wajah',
-                warna: const Color(0xFF7C3AED),
-                aktif: !selesai,
-                onTap: selesai ? null : onPressed,
+                ikon: isLibur
+                    ? Icons.lock_rounded
+                    : Icons.camera_alt_rounded,
+                label: isLibur ? 'Dikunci' : 'Kamera',
+                sublabel: isLibur ? _statusText : 'Foto Wajah',
+                warna: isLibur
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF2563EB),
+                aktif: !tombolDisabled && !selesai,
+                onTap: tombolDisabled || selesai
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          PageRouteBuilder(
+                            opaque: false,
+                            pageBuilder: (_, __, ___) => AbsensiCameraModal(
+                              onSimpan: (result) {
+                                widget.onPressed?.call();
+                              },
+                            ),
+                            transitionsBuilder: (_, anim, __, child) =>
+                                FadeTransition(opacity: anim, child: child),
+                            transitionDuration:
+                                const Duration(milliseconds: 280),
+                          ),
+                        );
+                      },
               ),
             ),
+
             const SizedBox(width: 14),
+
             // Tombol Barcode
             Expanded(
               child: _TombolOpsi(
-                ikon: Icons.qr_code_scanner_rounded,
-                label: 'Barcode',
-                sublabel: 'Scan Kode',
-                warna: const Color(0xFF1D4ED8),
-                aktif: !selesai,
-                onTap: selesai ? null : onPressed,
+                ikon: isLibur
+                    ? Icons.lock_rounded
+                    : Icons.qr_code_scanner_rounded,
+                label: isLibur ? 'Dikunci' : 'Barcode',
+                sublabel: isLibur ? _statusText : 'Scan Kode',
+                warna: isLibur
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF1D4ED8),
+                aktif: !tombolDisabled && !selesai,
+                onTap: tombolDisabled || selesai
+                    ? null
+                    : () {
+                        Navigator.of(context).push(
+                          PageRouteBuilder(
+                            opaque: false,
+                            pageBuilder: (_, __, ___) => AbsensiBarcodesModal(
+                              onAbsensi: (result) {
+                                widget.onPressed?.call();
+                              },
+                            ),
+                            transitionsBuilder: (_, anim, __, child) =>
+                                FadeTransition(opacity: anim, child: child),
+                            transitionDuration:
+                                const Duration(milliseconds: 280),
+                          ),
+                        );
+                      },
               ),
             ),
           ],
@@ -58,115 +150,12 @@ class AbsensiActionButton extends StatelessWidget {
         const SizedBox(height: 14),
 
         // ── Tombol Utama Absen ───────────────────────────
-        AnimatedBuilder(
-          animation: pulseAnim,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: (!selesai && !sedangMemproses) ? pulseAnim.value : 1.0,
-              child: child,
-            );
-          },
-          child: GestureDetector(
-            onTap: onPressed,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: double.infinity,
-              height: 60,
-              decoration: BoxDecoration(
-                gradient: selesai
-                    ? const LinearGradient(
-                        colors: [Color(0xFF94A3B8), Color(0xFF64748B)],
-                      )
-                    : LinearGradient(
-                        colors: [
-                          status.warna,
-                          status.warna.withOpacity(0.8),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: selesai
-                    ? []
-                    : [
-                        BoxShadow(
-                          color: status.warna.withOpacity(0.4),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-              ),
-              child: Center(
-                child: sedangMemproses
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Memverifikasi...',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            selesai
-                                ? Icons.check_circle_rounded
-                                : status.ikon,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            status.labelTombol,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.2,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-        ),
-
-        if (selesai) ...[
-          const SizedBox(height: 10),
-          Text(
-            'Absensi hari ini sudah selesai. Sampai jumpa besok! 👋',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: const Color(0xFF94A3B8),
-              fontFamily: 'Poppins',
-            ),
-          ),
-        ],
       ],
     );
   }
 }
 
-// ── Widget Tombol Opsi (Kamera / Fingerprint) ─────────────
+// ── Widget Tombol Opsi (Kamera / Barcode) ─────────────────
 class _TombolOpsi extends StatelessWidget {
   final IconData ikon;
   final String label;
@@ -197,13 +186,15 @@ class _TombolOpsi extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: aktif ? warna.withOpacity(0.2) : const Color(0xFFE2E8F0),
+              color: aktif
+                  ? warna.withValues(alpha: 0.2)
+                  : const Color(0xFFE2E8F0),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
                 color: aktif
-                    ? warna.withOpacity(0.08)
+                    ? warna.withValues(alpha: 0.08)
                     : Colors.transparent,
                 blurRadius: 12,
                 offset: const Offset(0, 4),
@@ -216,33 +207,37 @@ class _TombolOpsi extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: warna.withOpacity(0.1),
+                  color: warna.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(ikon, color: warna, size: 22),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF0F172A),
-                      fontFamily: 'Poppins',
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF0F172A),
+                        fontFamily: 'Poppins',
+                      ),
                     ),
-                  ),
-                  Text(
-                    sublabel,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      color: const Color(0xFF94A3B8),
-                      fontFamily: 'Poppins',
+                    Text(
+                      sublabel,
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        color: Color(0xFF94A3B8),
+                        fontFamily: 'Poppins',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),

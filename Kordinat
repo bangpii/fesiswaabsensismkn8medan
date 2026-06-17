@@ -1,0 +1,4 @@
+  private $lat_min = 3.565500;
+    private $lat_max = 3.567300;
+    private $lng_min = 98.645900;
+    private $lng_max = 98.647300;

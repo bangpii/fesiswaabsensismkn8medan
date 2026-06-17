@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:boxicons/boxicons.dart';
 import '../../config/app_colors.dart';
 
@@ -22,7 +23,7 @@ class AppFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       _NavItem(ikon: FeatherIcons.home, ikonAktif: Boxicons.bxs_home, label: 'Home'),
-      _NavItem(ikon: FeatherIcons.messageCircle, ikonAktif: Boxicons.bxs_message_rounded_dots, label: 'Mail'),
+      _NavItem(ikon: MdiIcons.gmail, ikonAktif: MdiIcons.gmail, label: 'Mail'),
       _NavItem(ikon: Boxicons.bx_camera, ikonAktif: Boxicons.bxs_camera, label: 'Absensi', isAbsensi: true),
       _NavItem(ikon: FeatherIcons.fileText, ikonAktif: Boxicons.bxs_file, label: 'Izin'),
       _NavItem(ikon: FeatherIcons.user, ikonAktif: Boxicons.bxs_user, label: 'Profil'),

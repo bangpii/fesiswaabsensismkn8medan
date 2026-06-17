@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:boxicons/boxicons.dart';
 import '../../../config/app_colors.dart';
+import '../home/pengumuman.dart';
+import '../../../services/cms_service.dart';
+
 
 // ═══════════════════════════════════════════════════════════
 // SECTION AKSI CEPAT — Dengan spacing bottom
 // ═══════════════════════════════════════════════════════════
 class SectionAksiCepat extends StatelessWidget {
-  const SectionAksiCepat({super.key});
+
+  final Function(int)? onNavigate;
+  final VoidCallback? onJadwalTap;
+
+  const SectionAksiCepat({
+    super.key,
+    this.onNavigate,
+    this.onJadwalTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +47,10 @@ class SectionAksiCepat extends StatelessWidget {
         // ── Grid dengan offset top ─────────────────────────
         Transform.translate(
           offset: const Offset(0, 20), // Top offset sudah diset
-          child: const AksiCepatGrid(),
+         child: AksiCepatGrid(
+  onNavigate: onNavigate,
+  onJadwalTap: onJadwalTap,
+),
         ),
         // ── JARAK BOTTOM ───────────────────────────────────
         const SizedBox(height: 16), // ← Tambahkan ini untuk jarak ke bawah
@@ -48,14 +63,22 @@ class SectionAksiCepat extends StatelessWidget {
 // AKSI CEPAT GRID
 // ═══════════════════════════════════════════════════════════
 class AksiCepatGrid extends StatelessWidget {
-  const AksiCepatGrid({super.key});
+
+  final Function(int)? onNavigate;
+  final VoidCallback? onJadwalTap;
+
+  const AksiCepatGrid({
+    super.key,
+    this.onNavigate,
+    this.onJadwalTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = [
       {
         'label': 'Absensi',
-        'ikon': Boxicons.bx_fingerprint,
+        'ikon': Boxicons.bxs_camera,
         'warna': AppColors.accent,
         'bg': const Color(0xFFEFF6FF),
       },
@@ -78,14 +101,14 @@ class AksiCepatGrid extends StatelessWidget {
         'bg': const Color(0xFFF0FDF4),
       },
       {
-        'label': 'Pesan',
-        'ikon': Boxicons.bx_message_dots,
+        'label': 'Mail',
+        'ikon': MdiIcons.gmail,
         'warna': const Color(0xFFF59E0B),
         'bg': const Color(0xFFFFFBEB),
       },
       {
-        'label': 'Tabungan',
-        'ikon': Boxicons.bx_wallet,
+        'label': 'Informasi',
+        'ikon': Boxicons.bx_bell,
         'warna': const Color(0xFFDC2626),
         'bg': const Color(0xFFFEF2F2),
       },
@@ -104,7 +127,9 @@ class AksiCepatGrid extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (_, i) {
         final item = items[i];
-        return AksiCepatItem(
+      return AksiCepatItem(
+        onNavigate: onNavigate,
+        onJadwalTap: onJadwalTap,
           label: item['label'] as String,
           ikon: item['ikon'] as IconData,
           warna: item['warna'] as Color,
@@ -124,18 +149,67 @@ class AksiCepatItem extends StatelessWidget {
   final Color warna;
   final Color bg;
 
+  final Function(int)? onNavigate;
+  final VoidCallback? onJadwalTap;
+
   const AksiCepatItem({
     super.key,
     required this.label,
     required this.ikon,
     required this.warna,
     required this.bg,
+    this.onNavigate,
+    this.onJadwalTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+onTap: () {
+
+  // 🔥 ABSENSI
+  if (label.trim() == 'Absensi') {
+
+    onNavigate?.call(2);
+
+  }
+
+  // 🔥 IZIN
+  else if (label.trim() == 'Izin') {
+
+    onNavigate?.call(3);
+
+  }
+
+  // 🔥 MAIL
+  else if (label.trim() == 'Mail') {
+
+    onNavigate?.call(1);
+
+  }
+
+  // 🔥 NILAI
+  else if (label.trim() == 'Nilai') {
+
+    onNavigate?.call(4);
+
+  }
+
+  // 🔥 JADWAL
+else if (label.trim() == 'Jadwal') {
+
+  onJadwalTap?.call();
+
+}
+
+  // 🆕 PENGUMUMAN — buka modal semua pengumuman langsung
+  else if (label.trim() == 'Informasi') {
+
+    bukaModalSemuaPengumuman(context, CmsService.cache);
+
+  }
+
+},
       child: Container(
         decoration: BoxDecoration(
           color: bg,

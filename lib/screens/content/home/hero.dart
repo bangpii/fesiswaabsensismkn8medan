@@ -2,14 +2,49 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_feather_icons/flutter_feather_icons.dart';
-import '../../../config/app_colors.dart';
+// import '../../../config/app_colors.dart';
+import '../../../services/absensi_semester_realtime_service.dart';
 
 // ═══════════════════════════════════════════════════════════
 // HERO: Gradient biru gelap + gelombang + konten kaya
 // ═══════════════════════════════════════════════════════════
-class HeroAbstrak extends StatelessWidget {
+class HeroAbstrak extends StatefulWidget {
+  const HeroAbstrak({
+    super.key,
+    required this.waveController,
+  });
+
   final AnimationController waveController;
-  const HeroAbstrak({super.key, required this.waveController});
+
+  @override
+  State<HeroAbstrak> createState() => _HeroAbstrakState();
+}
+
+class _HeroAbstrakState extends State<HeroAbstrak> {
+  // ── Data semester realtime ──────────────────────────────
+  AbsensiSemesterData? semesterData;
+
+ @override
+  void initState() {
+    super.initState();
+
+    // 🔥 Ambil cache dulu biar tidak blank
+    semesterData =
+        AbsensiSemesterRealtimeService.latestData;
+
+    // 🔥 Start realtime
+    AbsensiSemesterRealtimeService.start();
+
+    // 🔥 Listen realtime
+    AbsensiSemesterRealtimeService.stream.listen((data) {
+
+      if (!mounted) return;
+
+      setState(() {
+        semesterData = data;
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +76,10 @@ class HeroAbstrak extends StatelessWidget {
           // Gelombang animasi
           Positioned.fill(
             child: AnimatedBuilder(
-              animation: waveController,
+              animation: widget.waveController,
               builder: (_, __) => CustomPaint(
                 painter: WavePainter(
-                  animValue: waveController.value,
+                  animValue: widget.waveController.value,
                   screenWidth: screenWidth,
                 ),
               ),
@@ -129,7 +164,8 @@ class HeroAbstrak extends StatelessWidget {
                           color: const Color(0xFF22C55E).withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(100),
                           border: Border.all(
-                            color: const Color(0xFF22C55E).withValues(alpha: 0.45),
+                            color:
+                                const Color(0xFF22C55E).withValues(alpha: 0.45),
                             width: 1,
                           ),
                         ),
@@ -194,12 +230,16 @@ class HeroAbstrak extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       // Kanan: mini stats 3 kolom
-                      const MiniStatsCard(),
+                      MiniStatsCard(
+                        data: semesterData,
+                      ),
                     ],
                   ),
 
                   // ── Baris 3: Progress kehadiran ──────────────────
-                  const KehadiranProgress(),
+                  KehadiranProgress(
+                    data: semesterData,
+                  ),
                 ],
               ),
             ),
@@ -212,11 +252,28 @@ class HeroAbstrak extends StatelessWidget {
   String _getTanggalHariIni() {
     final now = DateTime.now();
     const hari = [
-      'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu'
     ];
     const bulan = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des'
     ];
     return '${hari[now.weekday - 1]}, ${now.day} ${bulan[now.month]} ${now.year}';
   }
@@ -226,7 +283,12 @@ class HeroAbstrak extends StatelessWidget {
 // Mini Stats Card (pojok kanan Hero)
 // ─────────────────────────────────────────────────────────
 class MiniStatsCard extends StatelessWidget {
-  const MiniStatsCard({super.key});
+  final AbsensiSemesterData? data;
+
+  const MiniStatsCard({
+    super.key,
+    required this.data,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -243,27 +305,30 @@ class MiniStatsCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const StatItem(
-              nilai: '92%',
-              label: 'Hadir',
-              warna: Color(0xFF86EFAC)),
-          VerticalDivider(),
-          const StatItem(
-              nilai: '3',
-              label: 'Izin',
-              warna: Color(0xFFFBBF24)),
-          VerticalDivider(),
-          const StatItem(
-              nilai: '1',
-              label: 'Alpha',
-              warna: Color(0xFFF87171)),
+          StatItem(
+            nilai: '${data?.persentaseHadir ?? 0}%',
+            label: 'Hadir',
+            warna: const Color(0xFF86EFAC),
+          ),
+          HeroDivider(),
+          StatItem(
+            nilai: '${data?.izin ?? 0}',
+            label: 'Izin',
+            warna: const Color(0xFFFBBF24),
+          ),
+          HeroDivider(),
+          StatItem(
+            nilai: '${data?.alpa ?? 0}',
+            label: 'Alpha',
+            warna: const Color(0xFFF87171),
+          ),
         ],
       ),
     );
   }
 }
 
-class VerticalDivider extends StatelessWidget {
+class HeroDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -279,8 +344,13 @@ class StatItem extends StatelessWidget {
   final String nilai;
   final String label;
   final Color warna;
-  const StatItem(
-      {super.key, required this.nilai, required this.label, required this.warna});
+
+  const StatItem({
+    super.key,
+    required this.nilai,
+    required this.label,
+    required this.warna,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -314,11 +384,17 @@ class StatItem extends StatelessWidget {
 // Progress Kehadiran Bar
 // ─────────────────────────────────────────────────────────
 class KehadiranProgress extends StatelessWidget {
-  const KehadiranProgress({super.key});
+  final AbsensiSemesterData? data;
+
+  const KehadiranProgress({
+    super.key,
+    required this.data,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const persen = 0.92;
+    final persen = (data?.persentaseHadir ?? 0) / 100;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -335,7 +411,8 @@ class KehadiranProgress extends StatelessWidget {
               ),
             ),
             Text(
-              '92% · 22/24 pertemuan',
+              '${data?.persentaseHadir ?? 0}% · '
+              '${data?.totalMasuk ?? 0}/${data?.totalPertemuan ?? 0} pertemuan',
               style: GoogleFonts.poppins(
                 fontSize: 10,
                 color: Colors.white.withValues(alpha: 0.85),
@@ -357,7 +434,7 @@ class KehadiranProgress extends StatelessWidget {
               ),
               // Fill
               FractionallySizedBox(
-                widthFactor: persen,
+                widthFactor: persen.clamp(0.0, 1.0),
                 child: Container(
                   height: 5,
                   decoration: BoxDecoration(
@@ -380,6 +457,7 @@ class KehadiranProgress extends StatelessWidget {
 class WavePainter extends CustomPainter {
   final double animValue;
   final double screenWidth;
+
   WavePainter({required this.animValue, required this.screenWidth});
 
   @override
@@ -401,8 +479,7 @@ class WavePainter extends CustomPainter {
     path.moveTo(0, yBase);
     for (double x = 0; x <= size.width; x++) {
       final y = yBase +
-          math.sin(
-                  (x / size.width * 2 * math.pi) + (anim * 2 * math.pi)) *
+          math.sin((x / size.width * 2 * math.pi) + (anim * 2 * math.pi)) *
               amplitude;
       path.lineTo(x, y);
     }

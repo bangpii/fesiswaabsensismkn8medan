@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'izin/izin_models.dart';
 import 'izin/izin_header.dart';
 import 'izin/izin_form_card.dart';
 import 'izin/izin_history_tile.dart';
+import '../../services/izin_realtime_service.dart';
 
 // ═══════════════════════════════════════════════════════════
 // IZIN SCREEN — Root / Wadah Utama
@@ -22,31 +24,50 @@ class _IzinScreenState extends State<IzinScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _slideController;
   late Animation<Offset> _slideAnim;
+  late StreamSubscription _izinSub;
 
   List<RiwayatIzin> _riwayat = [];
+  bool _isLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _riwayat = buatDummyRiwayatIzin();
+void initState() {
+  super.initState();
 
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 550),
-    )..forward();
+  _slideController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 550),
+  )..forward();
 
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _slideController, curve: Curves.easeOut),
-    );
-  }
+  _slideAnim = Tween<Offset>(
+    begin: const Offset(0, 0.06),
+    end: Offset.zero,
+  ).animate(
+    CurvedAnimation(parent: _slideController, curve: Curves.easeOut),
+  );
+
+  // 🔥 START REALTIME IZIN
+ Future.microtask(() async {
+  await IzinRealtimeService.start();
+});
+
+  // 🔥 LISTEN DATA
+_izinSub = IzinRealtimeService.stream.listen((state) {
+  final list = state.izins;
+
+  setState(() {
+    _isLoading = false; // 🔥 STOP loading
+    _riwayat = list
+        .map((e) => RiwayatIzin.fromJson(e))
+        .toList();
+  });
+});
+}
 
   @override
-  void dispose() {
-    _slideController.dispose();
-    super.dispose();
+    void dispose() {
+      _izinSub.cancel(); // 🔥 WAJIB
+      _slideController.dispose();
+      super.dispose();
   }
 
   void _onIzinTerkirim() {
@@ -75,18 +96,20 @@ class _IzinScreenState extends State<IzinScreen>
                   physics: const BouncingScrollPhysics(),
                   slivers: [
                     // ── Header ───────────────────────────
-                    const SliverToBoxAdapter(
-                      child: IzinHeader(),
+                  SliverToBoxAdapter(
+                    child: IzinHeader(
+                      onBuatIzin: () {
+                        showIzinFormModal(context, onSuccess: _onIzinTerkirim);
+                      },
                     ),
-
-                    // ── Form Card ────────────────────────
-                    SliverToBoxAdapter(
-                      child: IzinFormCard(onKirim: _onIzinTerkirim),
-                    ),
+                  ),
 
                     // ── Riwayat Section ──────────────────
                     SliverToBoxAdapter(
-                      child: IzinHistorySection(riwayat: _riwayat),
+                      child: IzinHistorySection(
+  riwayat: _riwayat,
+  isLoading: _isLoading, // 🔥 INI YANG KURANG
+),
                     ),
 
                     // ── Bottom Padding ───────────────────
