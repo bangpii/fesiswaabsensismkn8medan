@@ -75,10 +75,20 @@ class _LoginScreenState extends State<LoginScreen>
     final login = _nisnController.text.trim();
     final password = _passwordController.text;
 
-    if (login.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'NISN dan password wajib diisi');
-      return;
-    }
+  if (login.isEmpty && password.isEmpty) {
+    setState(() => _errorMessage = 'NISN dan password wajib diisi');
+    return;
+  }
+
+  if (login.isEmpty) {
+    setState(() => _errorMessage = 'NISN wajib diisi');
+    return;
+  }
+
+  if (password.isEmpty) {
+    setState(() => _errorMessage = 'Password wajib diisi');
+    return;
+  }
 
     HapticFeedback.mediumImpact();
     setState(() {
@@ -113,11 +123,45 @@ class _LoginScreenState extends State<LoginScreen>
 
             if (nama.isNotEmpty) {
               final cache         = StudentDataCache.instance;
-              cache.isLoaded      = true;
-              cache.namaLengkap   = nama;
-              cache.photoUrl      = foto;
-              cache.jadwalHariIni = []; // jadwal di-build di HomeScreen
-              cache.rawData       = studentRaw;
+// Build jadwal dari sched sebelum simpan ke cache
+final now = TimeOfDay.now();
+final nowMin = now.hour * 60 + now.minute;
+final sorted = List<Map<String, dynamic>>.from(sched)
+  ..sort((a, b) => ((a['jam_masuk'] as String?) ?? '')
+      .compareTo((b['jam_masuk'] as String?) ?? ''));
+
+final jadwalBuilt = sorted.map((s) {
+  final rawIn  = (s['jam_masuk']  as String?) ?? '00:00:00';
+  final rawOut = (s['jam_selesai'] as String?) ?? '00:00:00';
+  int mnt(String r) {
+    final p = r.split(':');
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+  }
+  String fmt(String r) {
+    final p = r.split(':');
+    return p.length >= 2 ? '${p[0]}:${p[1]}' : r;
+  }
+  final inMin  = mnt(rawIn);
+  final outMin = mnt(rawOut);
+  final String status;
+  if (nowMin > outMin)       status = 'selesai';
+  else if (nowMin >= inMin)  status = 'aktif';
+  else                       status = 'akan datang';
+  return <String, dynamic>{
+    'mapel'  : (s['module']  as String?) ?? '-',
+    'guru'   : (s['teacher'] as String?) ?? '-',
+    'jam'    : '${fmt(rawIn)} – ${fmt(rawOut)}',
+    'ruang'  : '-',
+    'status' : status,
+    'icon'   : Icons.book,
+  };
+}).toList();
+
+cache.isLoaded      = true;
+cache.namaLengkap   = nama;
+cache.photoUrl      = foto;
+cache.jadwalHariIni = jadwalBuilt; // ← sudah terisi, bukan []
+cache.rawData       = studentRaw;
             }
           }
         } catch (_) {

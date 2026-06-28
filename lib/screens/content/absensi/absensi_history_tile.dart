@@ -5,6 +5,7 @@
 // • Data dari AbsensiHistoryService (realtime Reverb)
 // • Card per hari, iPhone-style dengan toggle Masuk/Pulang
 // • Foto absen ditampilkan besar di tengah card
+// • Icon barcode jika absen via barcode (bukan foto)
 // • Fallback icon user kalau tidak ada foto / alpa
 // • Status chip di header + jam + keterangan
 // • Scroll horizontal, animasi stagger
@@ -29,46 +30,55 @@ class _AbsensiHistorySectionState extends State<AbsensiHistorySection> {
   AbsensiHistoryResponse? _response;
   bool _loading = true;
 
-  // ── Filter: tampilkan hanya minggu ini ──────────
-List<RiwayatAbsensi> get _mingguIni {
-  if (_response == null) return [];
+  // ═══════════════════════════════════════════════
+  // 🔥 FILTER MINGGU INI — logika konsisten dengan backend
+  // ═══════════════════════════════════════════════
+  List<RiwayatAbsensi> get _mingguIni {
+    if (_response == null) return [];
 
-  final now = DateTime.now();
+    final now = DateTime.now();
 
-  // 🔥 cari Senin pertama bulan ini
-  DateTime firstMonday =
-      DateTime(now.year, now.month, 1);
+    // 🔥 Referensi: Senin pertama bulan ini (sama dengan backend)
+    DateTime firstMonday = DateTime(now.year, now.month, 1);
+    while (firstMonday.weekday != DateTime.monday) {
+      firstMonday = firstMonday.add(const Duration(days: 1));
+    }
 
-  while (firstMonday.weekday != DateTime.monday) {
-    firstMonday =
-        firstMonday.add(const Duration(days: 1));
+    // 🔥 Hitung mingguSekarang berdasarkan tanggal hari ini
+    // Kalau Sabtu/Minggu, tetap pakai hari Jumat terakhir sebagai acuan
+    final DateTime referenceDay;
+    if (now.weekday == DateTime.saturday) {
+      referenceDay = now.subtract(const Duration(days: 1)); // Jumat
+    } else if (now.weekday == DateTime.sunday) {
+      referenceDay = now.subtract(const Duration(days: 2)); // Jumat
+    } else {
+      referenceDay = now;
+    }
+
+    // Kalau referenceDay sebelum firstMonday (awal bulan weekend), pakai minggu 1
+    final diffDays = referenceDay.isAfter(firstMonday) || referenceDay.isAtSameMomentAs(firstMonday)
+        ? referenceDay.difference(firstMonday).inDays
+        : 0;
+
+    final mingguSekarang = (diffDays ~/ 7) + 1;
+
+    // 🔥 Filter data: mingguKe cocok + bulan & tahun sama
+    final filtered = _response!.data.where((item) {
+      try {
+        final d = DateTime.parse(item.tanggal);
+        return item.mingguKe == mingguSekarang &&
+            d.month == now.month &&
+            d.year == now.year;
+      } catch (_) {
+        return false;
+      }
+    }).toList();
+
+    // 🔥 Sort by tanggal aktual (ascending = Senin dulu)
+    filtered.sort((a, b) => a.tanggal.compareTo(b.tanggal));
+
+    return filtered;
   }
-
-  // 🔥 kalau Sabtu/Minggu
-  // tetap gunakan Jumat terakhir sekolah
-  final adjustedNow = now.weekday >= 6
-      ? firstMonday.add(
-          Duration(
-            days:
-                ((now.difference(firstMonday).inDays ~/ 7) * 7) +
-                    4,
-          ),
-        )
-      : now;
-
-  final diffDays =
-      adjustedNow.difference(firstMonday).inDays;
-
-  final mingguSekarang = (diffDays ~/ 7) + 1;
-
-  return _response!.data.where((item) {
-    final d = DateTime.parse(item.tanggal);
-
-    return item.mingguKe == mingguSekarang &&
-        d.month == adjustedNow.month &&
-        d.year == adjustedNow.year;
-  }).toList();
-}
 
   String get _namaBulan {
     const bulan = [
@@ -81,7 +91,27 @@ List<RiwayatAbsensi> get _mingguIni {
 
   String get _labelMinggu {
     final now = DateTime.now();
-    final mingguKe = ((now.day - 1) ~/ 7) + 1;
+
+    // Hitung minggu ke berapa (konsisten dengan logika _mingguIni)
+    DateTime firstMonday = DateTime(now.year, now.month, 1);
+    while (firstMonday.weekday != DateTime.monday) {
+      firstMonday = firstMonday.add(const Duration(days: 1));
+    }
+
+    final DateTime referenceDay;
+    if (now.weekday == DateTime.saturday) {
+      referenceDay = now.subtract(const Duration(days: 1));
+    } else if (now.weekday == DateTime.sunday) {
+      referenceDay = now.subtract(const Duration(days: 2));
+    } else {
+      referenceDay = now;
+    }
+
+    final diffDays = referenceDay.isAfter(firstMonday) || referenceDay.isAtSameMomentAs(firstMonday)
+        ? referenceDay.difference(firstMonday).inDays
+        : 0;
+
+    final mingguKe = (diffDays ~/ 7) + 1;
     return 'Minggu ke-$mingguKe';
   }
 
@@ -434,16 +464,23 @@ class _AbsensiCardState extends State<_AbsensiCard>
 
   String get _activeLabel => _showPulang ? 'Pulang' : 'Masuk';
 
+  // 🔥 Tipe media aktif (camera / barcode)
+  String? get _activeTipe =>
+      _showPulang ? widget.data.tipePulang : widget.data.tipeMasuk;
+
+  bool get _isBarcode => _activeTipe == 'barcode';
+
   // ── Keterangan dinamis ──────────────────────────
   String get _keteranganText {
     if (_showPulang) {
       if (!widget.data.sudahPulang) {
-        // Cek apakah ada data masuk tapi tidak ada pulang
         if (widget.data.sudahMasuk) {
           return 'Belum absen pulang';
         }
         return 'Tidak ada data absen pulang';
       }
+      // 🔥 keterangan kustom untuk barcode pulang
+      if (_isBarcode) return 'Pulang via Barcode ✓';
       return widget.data.keterangan != null &&
               widget.data.keterangan!.isNotEmpty
           ? widget.data.keterangan!
@@ -455,11 +492,16 @@ class _AbsensiCardState extends State<_AbsensiCard>
         }
         return 'Tidak ada data absen masuk';
       }
+      // 🔥 keterangan kustom untuk barcode masuk
+      if (_isBarcode) {
+        return widget.data.status.toLowerCase() == 'terlambat'
+            ? 'Masuk via Barcode (Terlambat)'
+            : 'Masuk via Barcode ✓';
+      }
       if (widget.data.keterangan != null &&
           widget.data.keterangan!.isNotEmpty) {
         return widget.data.keterangan!;
       }
-      // Cek status untuk keterangan default masuk
       switch (widget.data.status.toLowerCase()) {
         case 'hadir':
           return 'Absen Masuk Tepat Waktu!';
@@ -614,11 +656,12 @@ class _AbsensiCardState extends State<_AbsensiCard>
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
                   child: Column(
                     children: [
-                      // ── Foto Absen ─────────────────────
+                      // ── Foto / Barcode / Placeholder ──────
                       FadeTransition(
                         opacity: _fadeAnim,
                         child: GestureDetector(
-                          onTap: _activeHasSudah && _activeFoto != null
+                          // Kalau barcode, tidak ada fullscreen foto
+                          onTap: _activeHasSudah && _activeFoto != null && !_isBarcode
                               ? () => _showFotoDialog(
                                   context, _activeFoto!, _activeLabel)
                               : null,
@@ -626,12 +669,12 @@ class _AbsensiCardState extends State<_AbsensiCard>
                             width: 112,
                             height: 112,
                             decoration: BoxDecoration(
-                              color: _activeHasSudah && _activeFoto != null
+                              color: _activeHasSudah
                                   ? _statusColor.withOpacity(0.06)
                                   : const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(22),
                               border: Border.all(
-                                color: _activeHasSudah && _activeFoto != null
+                                color: _activeHasSudah
                                     ? _statusColor.withOpacity(0.20)
                                     : const Color(0xFFE2E8F0),
                                 width: 1.5,
@@ -647,7 +690,7 @@ class _AbsensiCardState extends State<_AbsensiCard>
 
                       const SizedBox(height: 10),
 
-                                           // ── Jam Absen ──────────────────────
+                      // ── Jam Absen ──────────────────────
                       FadeTransition(
                         opacity: _fadeAnim,
                         child: Column(
@@ -673,7 +716,7 @@ class _AbsensiCardState extends State<_AbsensiCard>
                                   ? _activeJam!
                                   : '--:--',
                               style: TextStyle(
-                                fontSize: 15,        // ← DIKECILIN
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: _activeHasSudah && _activeJam != null
                                     ? (_showPulang
@@ -691,7 +734,7 @@ class _AbsensiCardState extends State<_AbsensiCard>
 
                       const SizedBox(height: 12),
 
-                                           // ── Toggle Masuk / Pulang ───────────
+                      // ── Toggle Masuk / Pulang ───────────
                       Container(
                         height: 28,
                         decoration: BoxDecoration(
@@ -706,7 +749,6 @@ class _AbsensiCardState extends State<_AbsensiCard>
                               activeColor: _statusColor,
                               onTap: () => _toggleMode(false),
                             ),
-                            // ── Divider Vertikal ─────────────
                             Container(
                               width: 1,
                               height: 14,
@@ -730,12 +772,10 @@ class _AbsensiCardState extends State<_AbsensiCard>
                 ),
               ),
 
-                        // ── Keterangan Footer ────────────────────
-              // const SizedBox(height: 8),
+              // ── Keterangan Footer ────────────────────
               Container(
                 width: double.infinity,
-                padding:
-                    const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
                 decoration: const BoxDecoration(
                   color: Color(0xFFF8FAFC),
                   border: Border(
@@ -770,8 +810,16 @@ class _AbsensiCardState extends State<_AbsensiCard>
     );
   }
 
-  // ── Foto content: gambar / placeholder / alpa ──
+  // ════════════════════════════════════════════════
+  // 🔥 FOTO CONTENT — camera / barcode / placeholder
+  // ════════════════════════════════════════════════
   Widget _buildFotoContent() {
+    // 🔥 BARCODE — tampilkan icon barcode, bukan foto
+    if (_activeHasSudah && _isBarcode) {
+      return _BarcodePlaceholder(color: _statusColor);
+    }
+
+    // 🔥 CAMERA — tampilkan foto selfie
     if (_activeHasSudah && _activeFoto != null) {
       return Stack(
         fit: StackFit.expand,
@@ -822,7 +870,7 @@ class _AbsensiCardState extends State<_AbsensiCard>
       );
     }
 
-    // Tidak ada foto / belum absen
+    // 🔥 PLACEHOLDER — belum absen / alpa
     return _UserPlaceholder(
       color: _activeHasSudah ? _statusColor : const Color(0xFFCBD5E1),
       hasData: _activeHasSudah,
@@ -830,7 +878,7 @@ class _AbsensiCardState extends State<_AbsensiCard>
     );
   }
 
-   Color get _keteranganColor {
+  Color get _keteranganColor {
     if (!_activeHasSudah) {
       if (widget.data.status.toLowerCase() == 'alpa') {
         return const Color(0xFFDC2626);
@@ -850,7 +898,6 @@ class _AbsensiCardState extends State<_AbsensiCard>
     return const Color(0xFF64748B);
   }
 
-  // ── Foto dialog fullscreen ─────────────────────
   void _showFotoDialog(BuildContext context, String url, String labelFoto) {
     showDialog(
       context: context,
@@ -908,6 +955,60 @@ class _AbsensiCardState extends State<_AbsensiCard>
                     fontFamily: 'Poppins',
                   ),
                 ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════
+// 🔥 BARCODE PLACEHOLDER — tampil kalau absen via barcode
+// ════════════════════════════════════════════════════
+
+class _BarcodePlaceholder extends StatelessWidget {
+  final Color color;
+
+  const _BarcodePlaceholder({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: color.withOpacity(0.05),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Lingkaran icon barcode
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.10),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: color.withOpacity(0.25),
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                Icons.qr_code_rounded,
+                size: 28,
+                color: color.withOpacity(0.70),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'Via Barcode',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: color.withOpacity(0.65),
+                fontFamily: 'Poppins',
+                letterSpacing: 0.2,
+                height: 1,
               ),
             ),
           ],
@@ -998,7 +1099,6 @@ class _UserPlaceholder extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Lingkaran kepala
             Container(
               width: 36,
               height: 36,
@@ -1021,7 +1121,6 @@ class _UserPlaceholder extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 5),
-            // Badan
             Container(
               width: 48,
               height: 22,
@@ -1093,7 +1192,6 @@ class _SkeletonCardState extends State<_SkeletonCard>
             ),
             child: Column(
               children: [
-                // Top strip
                 Container(
                   height: 4,
                   decoration: BoxDecoration(
@@ -1102,7 +1200,6 @@ class _SkeletonCardState extends State<_SkeletonCard>
                         top: Radius.circular(26)),
                   ),
                 ),
-                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                   child: Row(
@@ -1129,7 +1226,6 @@ class _SkeletonCardState extends State<_SkeletonCard>
                 ),
                 const Divider(
                     height: 1, color: Color(0xFFEEF2F7), thickness: 1),
-                // Foto skeleton
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(14),
@@ -1173,7 +1269,6 @@ class _SkeletonCardState extends State<_SkeletonCard>
                     ),
                   ),
                 ),
-                // Footer skeleton
                 Container(
                   height: 34,
                   margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
@@ -1192,10 +1287,9 @@ class _SkeletonCardState extends State<_SkeletonCard>
 }
 
 // ════════════════════════════════════════════════════
-// LEGACY COMPAT — AbsensiHistoryTile (wrapper kosong)
+// LEGACY COMPAT
 // ════════════════════════════════════════════════════
 
-/// Deprecated — gunakan AbsensiHistorySection
 class AbsensiHistoryTile extends StatelessWidget {
   final dynamic riwayat;
   final int index;

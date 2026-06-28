@@ -108,13 +108,16 @@ class _HomeScreenState extends State<HomeScreen>
 
     final cache = StudentDataCache.instance;
 
-    if (cache.isLoaded) {
-      // ✅ Data sudah ada di cache → langsung tampil, TANPA loading
-      _namaLengkap   = cache.namaLengkap;
-      _photoUrl      = cache.photoUrl;
-      _jadwalHariIni = cache.jadwalHariIni;
-      _isLoading     = false;
-      _dataReady     = true;
+if (cache.isLoaded) {
+  _namaLengkap   = cache.namaLengkap;
+  _photoUrl      = cache.photoUrl;
+  // Fix icon yang masih placeholder dari login
+  _jadwalHariIni = cache.jadwalHariIni.map((j) => {
+    ...j,
+    'icon': _moduleIcon(j['mapel'] as String? ?? ''),
+  }).toList();
+  _isLoading     = false;
+  _dataReady     = true;
 
       // Carousel langsung start karena tidak ada loading
       WidgetsBinding.instance.addPostFrameCallback((_) {

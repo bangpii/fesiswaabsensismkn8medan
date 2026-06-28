@@ -1,7 +1,6 @@
 // lib/services/absensi_history_service.dart
 
 import 'dart:async';
-// import 'package:dio/dio.dart';
 import 'api_service.dart';
 import 'socket_service.dart';
 
@@ -32,6 +31,10 @@ class RiwayatAbsensi {
   final String? fotoMasuk;
   final String? fotoPulang;
 
+  // 🔥 BARU: tipe media untuk masuk & pulang
+  final String? tipeMasuk;
+  final String? tipePulang;
+
   final bool sudahMasuk;
   final bool sudahPulang;
 
@@ -46,6 +49,8 @@ class RiwayatAbsensi {
     required this.keterangan,
     required this.fotoMasuk,
     required this.fotoPulang,
+    required this.tipeMasuk,
+    required this.tipePulang,
     required this.sudahMasuk,
     required this.sudahPulang,
   });
@@ -62,6 +67,9 @@ class RiwayatAbsensi {
       keterangan: json['keterangan'],
       fotoMasuk: json['foto_masuk'],
       fotoPulang: json['foto_pulang'],
+      // 🔥 parse tipe_masuk & tipe_pulang dari backend
+      tipeMasuk: json['tipe_masuk'],
+      tipePulang: json['tipe_pulang'],
       sudahMasuk: json['sudah_masuk'] ?? false,
       sudahPulang: json['sudah_pulang'] ?? false,
     );
@@ -120,36 +128,11 @@ class AbsensiHistoryService {
 
       final List dataRaw = raw['data'] ?? [];
 
-      // 🔥 PARSE
+      // 🔥 PARSE SEMUA DATA — jangan filter/sort/take di sini
+      // Biarkan tile yang filter berdasarkan minggu
       final allData = dataRaw
           .map((e) => RiwayatAbsensi.fromJson(e))
           .toList();
-
-      // 🔥 FILTER HARI KERJA (Senin - Jumat)
-      final filtered = allData.where((item) {
-        return [
-          'Senin',
-          'Selasa',
-          'Rabu',
-          'Kamis',
-          'Jumat'
-        ].contains(item.hari);
-      }).toList();
-
-      // 🔥 URUTKAN SESUAI HARI
-      final urutan = [
-        'Senin',
-        'Selasa',
-        'Rabu',
-        'Kamis',
-        'Jumat'
-      ];
-
-      filtered.sort((a, b) =>
-          urutan.indexOf(a.hari).compareTo(urutan.indexOf(b.hari)));
-
-      // 🔥 AMBIL MAX 5 HARI
-      final finalData = filtered.take(5).toList();
 
       // 🔥 REKAP
       final meta = raw['meta'] ?? {};
@@ -163,7 +146,7 @@ class AbsensiHistoryService {
       };
 
       final result = AbsensiHistoryResponse(
-        data: finalData,
+        data: allData,
         rekap: rekap,
         total: meta['total_data'] ?? 0,
       );
@@ -201,27 +184,6 @@ class AbsensiHistoryService {
           .map((e) => RiwayatAbsensi.fromJson(e))
           .toList();
 
-      final filtered = allData.where((item) {
-        return [
-          'Senin',
-          'Selasa',
-          'Rabu',
-          'Kamis',
-          'Jumat'
-        ].contains(item.hari);
-      }).toList();
-
-      final urutan = [
-        'Senin',
-        'Selasa',
-        'Rabu',
-        'Kamis',
-        'Jumat'
-      ];
-
-      filtered.sort((a, b) =>
-          urutan.indexOf(a.hari).compareTo(urutan.indexOf(b.hari)));
-
       final meta = raw['meta'] ?? {};
       final rekapRaw = meta['rekap'] ?? {};
 
@@ -233,7 +195,7 @@ class AbsensiHistoryService {
       };
 
       return AbsensiHistoryResponse(
-        data: filtered,
+        data: allData,
         rekap: rekap,
         total: meta['total_data'] ?? 0,
       );

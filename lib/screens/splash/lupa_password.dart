@@ -142,7 +142,11 @@ class _LupaPasswordScreenState extends State<LupaPasswordScreen>
       return;
     }
     if (email.isEmpty || !email.contains('@')) {
-      setState(() => _errorMessage = 'Masukkan email yang valid');
+      setState(() {
+        _errorMessage = email.isEmpty
+            ? 'Email wajib diisi'
+            : 'Masukkan email yang valid';
+      });
       return;
     }
 

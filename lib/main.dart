@@ -17,6 +17,8 @@ import 'services/ping_service.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'services/student_data_cache.dart';
+import 'services/socket_service.dart';
+import 'services/cms_service.dart';
 
 void main() {
   runApp(const AbsensiApp());
@@ -210,9 +212,12 @@ class _MainScaffoldState extends State<MainScaffold>
         }
 
         // Server OK → tetap login
-        debugPrint('✅ [Auth] Token valid → auto login');
+// Server OK → tetap login
+       debugPrint('✅ [Auth] Token valid → auto login');
         if (mounted) {
           PingService.start();
+          SocketService.connect();    // 🔌 koneksi socket dulu
+          CmsService.startRealtime(); // 🔥 aktifkan realtime CMS
           setState(() {
             _isLoggedIn     = true;
             _isModalVisible = false;
@@ -226,6 +231,8 @@ class _MainScaffoldState extends State<MainScaffold>
         debugPrint('⚠️ [Auth] Server tidak bisa dicapai, tetap login: $networkError');
         if (mounted) {
           PingService.start();
+          SocketService.connect();    // 🔌 koneksi socket dulu
+          CmsService.startRealtime(); // 🔥 aktifkan realtime CMS
           setState(() {
             _isLoggedIn     = true;
             _isModalVisible = false;
@@ -272,6 +279,7 @@ class _MainScaffoldState extends State<MainScaffold>
 void _handleLoginSuccess() async {
     if (mounted) {
       PingService.start();
+      CmsService.startRealtime(); // 🔥 aktifkan realtime CMS
       setState(() {
         _isLoggedIn     = true;
         _isModalVisible = false;
@@ -279,7 +287,7 @@ void _handleLoginSuccess() async {
       });
     }
     _modalFadeController.forward();
-}
+  }
 
   // ═══════════════════════════════════════════════════════
   // 🔥 HANDLE LOGOUT — Hanya dipanggil saat user klik tombol Keluar

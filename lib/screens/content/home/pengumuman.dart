@@ -967,7 +967,8 @@ class _SectionPengumumanState extends State<SectionPengumuman> {
 
   // ── parse ─────────────────────────────────────────────
 
-  void _applyData(List<dynamic> raw) {
+void _applyData(List<dynamic> raw) {
+    print("📋 APPLY DATA: ${raw.length} items, mounted=$mounted");
     final list = parsePengumumanList(raw);
 
     if (!mounted) return;
@@ -975,6 +976,7 @@ class _SectionPengumumanState extends State<SectionPengumuman> {
       _pengumuman = list;
       _isLoading  = false;
     });
+    print("📋 PENGUMUMAN SET: ${list.length} items");
   }
 
   // ── modal semua ───────────────────────────────────────

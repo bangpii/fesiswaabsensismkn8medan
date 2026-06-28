@@ -42,7 +42,12 @@ class _IzinFormSheetState extends State<_IzinFormSheet>
   late Animation<Offset> _slideAnim;
   late Animation<double> _fadeAnim;
 
-  JenisIzin _jenisIzin = JenisIzin.sakit;
+  // 🔧 FIX: dibuat nullable (JenisIzin?) & tanpa nilai default,
+  // supaya saat modal pertama kali dibuka belum ada jenis izin
+  // yang terpilih. Ini dibutuhkan agar perilaku "klik untuk pilih,
+  // klik lagi untuk batal pilih" di _JenisIzinSelector bisa jalan,
+  // dan validasi "wajib pilih jenis izin" bisa benar-benar terpicu.
+  JenisIzin? _jenisIzin;
   final _keteranganController = TextEditingController();
   DateTime _tanggalIzin = DateTime.now();
   bool _sedangKirim = false;
@@ -81,8 +86,44 @@ class _IzinFormSheetState extends State<_IzinFormSheet>
     return '${d.year}-$mm-$dd';
   }
 
+  // 🔧 FIX: helper format tanggal versi Indonesia, dipakai untuk
+  // menampilkan tanggal di pesan validasi.
+  String _formatTanggalIndo(DateTime d) {
+    const bulan = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return '${d.day} ${bulan[d.month - 1]} ${d.year}';
+  }
+
   Future<void> _kirim() async {
     if (_sedangKirim) return;
+
+    // 🔧 FIX: VALIDASI TANGGAL — tidak boleh memilih tanggal
+    // sebelum hari ini (dibandingkan tanggal saja, tanpa jam).
+    final sekarang = DateTime.now();
+    final hariIni = DateTime(sekarang.year, sekarang.month, sekarang.day);
+    final tanggalDipilih =
+        DateTime(_tanggalIzin.year, _tanggalIzin.month, _tanggalIzin.day);
+
+    if (tanggalDipilih.isBefore(hariIni)) {
+      HapticFeedback.vibrate();
+      setState(() {
+        _errorMsg =
+            'Tidak bisa membuat izin sebelum tanggal ${_formatTanggalIndo(hariIni)}';
+      });
+      return;
+    }
+
+    // 🔧 FIX: VALIDASI JENIS IZIN — wajib dipilih sebelum kirim.
+    if (_jenisIzin == null) {
+      HapticFeedback.vibrate();
+      setState(() {
+        _errorMsg = 'Wajib pilih jenis izin';
+      });
+      return;
+    }
+
     HapticFeedback.mediumImpact();
     setState(() {
       _sedangKirim = true;
@@ -91,7 +132,7 @@ class _IzinFormSheetState extends State<_IzinFormSheet>
 
     final result = await IzinRealtimeService.create(
       tanggal: _formatTanggalApi(_tanggalIzin),
-      jenis: _jenisIzin.apiValue,
+      jenis: _jenisIzin!.apiValue,
       keterangan: _keteranganController.text.trim().isEmpty
           ? null
           : _keteranganController.text.trim(),
@@ -115,6 +156,9 @@ class _IzinFormSheetState extends State<_IzinFormSheet>
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
+    // 🔧 FIX: batasi tinggi maksimal sheet relatif ke tinggi layar,
+    // supaya proporsional di semua ukuran HP (kecil maupun besar).
+    final maxHeight = MediaQuery.of(context).size.height * 0.9;
 
     return SlideTransition(
       position: _slideAnim,
@@ -122,7 +166,7 @@ class _IzinFormSheetState extends State<_IzinFormSheet>
         opacity: _fadeAnim,
         child: Container(
           margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-          padding: EdgeInsets.only(bottom: bottomPad),
+          constraints: BoxConstraints(maxHeight: maxHeight),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -134,152 +178,160 @@ class _IzinFormSheetState extends State<_IzinFormSheet>
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Drag Handle ───────────────────────────
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 10, bottom: 4),
-                  width: 36,
-                  height: 3.5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(99),
+          // 🔧 FIX: konten dibungkus SingleChildScrollView. Kalau total
+          // tinggi konten (drag handle + header + error box + form)
+          // lebih besar dari ruang yang tersedia (HP dengan layar pendek,
+          // atau saat keyboard muncul), konten akan bisa di-scroll
+          // alih-alih overflow seperti error "RenderFlex overflowed".
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: bottomPad),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Drag Handle ───────────────────────────
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 10, bottom: 4),
+                    width: 36,
+                    height: 3.5,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
                 ),
-              ),
 
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Modal Header ──────────────────
-                    Row(
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2563EB).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: const Icon(
-                            FeatherIcons.fileText,
-                            size: 15,
-                            color: Color(0xFF2563EB),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Buat Izin Baru',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              'Isi form berikut dengan benar',
-                              style: GoogleFonts.poppins(
-                                fontSize: 10,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).pop(),
-                          child: Container(
-                            width: 28,
-                            height: 28,
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Modal Header ──────────────────
+                      Row(
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(8),
+                              color: const Color(0xFF2563EB).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(9),
                             ),
                             child: const Icon(
-                              FeatherIcons.x,
-                              size: 13,
-                              color: Color(0xFF64748B),
+                              FeatherIcons.fileText,
+                              size: 15,
+                              color: Color(0xFF2563EB),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // ── Error Message ─────────────────
-                    if (_errorMsg != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: const Color(0xFFFCA5A5), width: 1),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(FeatherIcons.alertCircle,
-                                size: 13, color: Color(0xFFDC2626)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _errorMsg!,
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Buat Izin Baru',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: const Color(0xFFDC2626),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
+                              Text(
+                                'Isi form berikut dengan benar',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pop(),
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                FeatherIcons.x,
+                                size: 13,
+                                color: Color(0xFF64748B),
+                              ),
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // ── Error Message ─────────────────
+                      if (_errorMsg != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: const Color(0xFFFCA5A5), width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(FeatherIcons.alertCircle,
+                                  size: 13, color: Color(0xFFDC2626)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMsg!,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: const Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // ── Tanggal Izin ──────────────────
+                      _FormLabel(label: 'Tanggal Izin'),
+                      const SizedBox(height: 6),
+                      _TanggalPicker(
+                        tanggal: _tanggalIzin,
+                        onPilih: (t) => setState(() => _tanggalIzin = t),
                       ),
                       const SizedBox(height: 14),
+
+                      // ── Jenis Izin ────────────────────
+                      _FormLabel(label: 'Jenis Izin'),
+                      const SizedBox(height: 8),
+                      _JenisIzinSelector(
+                        nilai: _jenisIzin,
+                        onChange: (v) => setState(() => _jenisIzin = v),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // ── Keterangan ────────────────────
+                      _FormLabel(label: 'Keterangan (Opsional)'),
+                      const SizedBox(height: 6),
+                      _TextAreaKeterangan(controller: _keteranganController),
+                      const SizedBox(height: 20),
+
+                      // ── Tombol Kirim ──────────────────
+                      _TombolKirim(
+                        sedangKirim: _sedangKirim,
+                        onKirim: _kirim,
+                      ),
                     ],
-
-                    // ── Tanggal Izin ──────────────────
-                    _FormLabel(label: 'Tanggal Izin'),
-                    const SizedBox(height: 6),
-                    _TanggalPicker(
-                      tanggal: _tanggalIzin,
-                      onPilih: (t) => setState(() => _tanggalIzin = t),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // ── Jenis Izin ────────────────────
-                    _FormLabel(label: 'Jenis Izin'),
-                    const SizedBox(height: 8),
-                    _JenisIzinSelector(
-                      nilai: _jenisIzin,
-                      onChange: (v) => setState(() => _jenisIzin = v),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // ── Keterangan ────────────────────
-                    _FormLabel(label: 'Keterangan (Opsional)'),
-                    const SizedBox(height: 6),
-                    _TextAreaKeterangan(controller: _keteranganController),
-                    const SizedBox(height: 20),
-
-                    // ── Tombol Kirim ──────────────────
-                    _TombolKirim(
-                      sedangKirim: _sedangKirim,
-                      onKirim: _kirim,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -374,8 +426,10 @@ class _TanggalPicker extends StatelessWidget {
 }
 
 class _JenisIzinSelector extends StatelessWidget {
-  final JenisIzin nilai;
-  final ValueChanged<JenisIzin> onChange;
+  // 🔧 FIX: nilai & callback dibuat nullable agar mendukung
+  // status "belum ada jenis izin yang dipilih".
+  final JenisIzin? nilai;
+  final ValueChanged<JenisIzin?> onChange;
 
   const _JenisIzinSelector({required this.nilai, required this.onChange});
 
@@ -388,7 +442,11 @@ class _JenisIzinSelector extends StatelessWidget {
           child: GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
-              onChange(jenis);
+              // 🔧 FIX: TOGGLE — kalau chip ini sudah aktif/terpilih,
+              // klik lagi akan membatalkan pilihan (kembali ke null /
+              // tidak ada jenis izin yang terpilih). Kalau belum aktif,
+              // klik akan memilih jenis ini.
+              onChange(aktif ? null : jenis);
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),

@@ -1,6 +1,17 @@
 // lib/screens/content/absensi/absensi_barcode_modal.dart
 //
-// 🔥 ABSENSI BARCODE MODAL — DINAMIS MASUK / PULANG
+// 🔥 ABSENSI BARCODE MODAL — DINAMIS MASUK / PULANG (FIXED — REAL SCAN)
+//
+// 🔧 PERBAIKAN UTAMA:
+//   Sebelumnya tombol "scan" hanya mengirim _barcodeValue (barcode milik
+//   akun yang login dari /barcode/status) TANPA pernah membaca kamera.
+//   Sekarang pakai mobile_scanner untuk benar-benar mendecode QR yang
+//   ada di depan kamera secara real-time, lalu HASIL DECODE itulah yang
+//   dikirim ke backend — bukan barcode milik akun sendiri.
+//
+//   Backend (AbsensiController::scanBarcodeMasuk/scanBarcodePulang) juga
+//   sudah ditambahkan validasi kepemilikan: barcode yang di-scan WAJIB
+//   milik akun yang sedang login, kalau tidak → 403 ditolak.
 //
 // Logika Barcode:
 //   QR berisi URL: "https://domain/redirect?code=SMKN8-{nisn}-{random}"
@@ -16,19 +27,20 @@
 //   Belum punya → "Generate Barcode" (POST /barcode/generate)
 //   Sudah punya → "Download Barcode" (GET /barcode/download → tampil QR)
 //
-// Alur Absensi:
+// Alur Absensi (BARU):
 //   1. Buka modal → start AbsensiRealtimeService → listen stream
 //   2. Update tipe (masuk/pulang) dari stream service
 //   3. Minta GPS
-//   4. Kamera belakang aktif
-//   5. Tap tombol → scan barcode (langsung, tanpa hold)
-//   6. Validasi format SMKN8-... → extract code
+//   4. Kamera scanner aktif (mobile_scanner)
+//   5. QR terdeteksi otomatis di depan kamera → onDetect dipanggil
+//   6. Validasi format SMKN8-... → extract code dari hasil DECODE REAL
 //   7. Kirim ke backend sesuai tipe (scan-barcode-masuk / scan-barcode-pulang)
-//   8. Berhasil → tampilkan sukses card
+//   8. Backend cross-check: barcode harus milik akun yang login
+//   9. Berhasil → tampilkan sukses card. Gagal (barcode bukan milik dia
+//      / tidak valid / dll) → tampilkan pesan gagal, TIDAK auto-retry.
 //
 import 'dart:io';
 import 'dart:async';
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -36,6 +48,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:gallery_saver_plus/gallery_saver.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../services/absensi_service.dart';
 import '../../../services/absensi_realtime_service.dart';
 
@@ -59,19 +72,17 @@ class AbsensiBarcodesModal extends StatefulWidget {
 
 class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
     with TickerProviderStateMixin {
-  // ── Kamera ───────────────────────────────────────────────
-  CameraController? _controller;
-  List<CameraDescription> _cameras = [];
-  int _currentCameraIndex = 0;
-  bool _kameraReady = false;
-  String? _kameraError;
+  // ── 🔥 Scanner kamera REAL (mobile_scanner) ───────────────
+  MobileScannerController? _scannerController;
+  bool _scannerReady = false;
+  String? _scannerError;
 
   // ── Dinamis Tipe dari AbsensiRealtimeService ─────────────
   TipeAbsensiBarcode _tipe = TipeAbsensiBarcode.masuk;
   bool _loadingStatus = true;
   String _statusText = 'Mengecek status absensi...';
 
-  // ── Barcode siswa ─────────────────────────────────────────
+  // ── Barcode siswa (HANYA untuk fitur Generate/Download) ──
   bool _loadingBarcode   = true;
   bool _hasBarcode       = false;
   String? _barcodeValue;
@@ -81,6 +92,7 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
   bool _scanSuccess    = false;
   bool _isProcessing   = false;
   String? _scanMessage;
+  bool _scanLocked     = false; // 🔥 cegah double-trigger saat sedang proses
 
   // ── GPS ──────────────────────────────────────────────────
   double _lat = 0.0;
@@ -119,10 +131,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
     _realtimeSub = AbsensiRealtimeService.stream.listen((state) {
       if (!mounted) return;
 
-      print("=== REALTIME BARCODE MODAL ===");
-      print("ACTION: ${state.action}");
-      print("TEXT: ${state.statusText}");
-
       setState(() {
         _loadingStatus = false;
         _statusText = state.statusText;
@@ -141,9 +149,9 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
       });
     });
 
-    // 🔥 STEP 3: Init kamera & barcode setelah setup listener
+    // 🔥 STEP 3: Init scanner & barcode setelah setup listener
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _initKamera();
+      await _initScanner();
       await _loadBarcodeStatus();
       await _loadGps();
     });
@@ -153,73 +161,39 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
   void dispose() {
     _pulseCtrl.dispose();
     _dotsCtrl.dispose();
-    _controller?.dispose();
+    _scannerController?.dispose();
     _realtimeSub?.cancel();
     super.dispose();
   }
 
-  // ════════════════════════════════════════════════════════
-  // ❌ _loadStatus() DIHAPUS — SEMUA LOGIKA DI ABSENSIREALTIMESERVICE
-  // ════════════════════════════════════════════════════════
-
-  // ── Init kamera belakang ─────────────────────────────────
-  Future<void> _initKamera({int index = 0}) async {
+  // ── 🔥 Init scanner kamera REAL ───────────────────────────
+  Future<void> _initScanner() async {
     setState(() {
-      _kameraReady = false;
-      _kameraError = null;
+      _scannerReady = false;
+      _scannerError = null;
     });
 
     try {
-      _cameras = await availableCameras();
-      if (_cameras.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _kameraError = 'Tidak ada kamera yang tersedia.';
-          });
-        }
-        return;
+      _scannerController = MobileScannerController(
+        facing: CameraFacing.back,
+        detectionSpeed: DetectionSpeed.noDuplicates,
+        formats: const [BarcodeFormat.qrCode],
+      );
+
+      if (mounted) {
+        setState(() => _scannerReady = true);
       }
-
-      // Default pakai kamera belakang
-      final back = _cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras.first,
-      );
-      final camIndex = _cameras.indexOf(back);
-      _currentCameraIndex = camIndex;
-
-      await _controller?.dispose();
-
-      final ctrl = CameraController(
-        back,
-        ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
-
-      await ctrl.initialize();
-
-      // Set zoom minimum
-      final minZoom = await ctrl.getMinZoomLevel();
-      await ctrl.setZoomLevel(minZoom);
-
-      if (!mounted) return;
-
-      setState(() {
-        _controller   = ctrl;
-        _kameraReady  = true;
-      });
     } catch (_) {
       if (mounted) {
         setState(() {
-          _kameraError =
+          _scannerError =
               'Gagal membuka kamera.\nIzinkan akses kamera terlebih dahulu.';
         });
       }
     }
   }
 
-  // ── Load barcode status dari backend ─────────────────────
+  // ── Load barcode status dari backend (HANYA utk Generate/Download) ──
   Future<void> _loadBarcodeStatus() async {
     setState(() => _loadingBarcode = true);
     try {
@@ -286,7 +260,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
       });
       _showBarcodeDialog();
     } else {
-      // Cek apakah sudah pernah generate
       if (result['data'] != null) {
         final data = result['data'];
         setState(() {
@@ -403,7 +376,7 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
     );
   }
 
-  // ── Dialog tampilkan barcode QR ───────────────────────────
+  // ── Dialog tampilkan barcode QR (milik sendiri) ───────────
   void _showBarcodeDialog() {
     if (_barcodeImageUrl == null) return;
 
@@ -443,7 +416,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                 ),
               ),
               const SizedBox(height: 20),
-              // QR Image
               Container(
                 width: 220,
                 height: 220,
@@ -479,7 +451,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                 ),
               ),
               const SizedBox(height: 14),
-              // Barcode value
               if (_barcodeValue != null)
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -502,7 +473,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                   ),
                 ),
               const SizedBox(height: 20),
-              // Info deep link
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -531,7 +501,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                 ),
               ),
               const SizedBox(height: 20),
-              // Tombol simpan ke galeri
               GestureDetector(
                 onTap: _saveBarcodeToGallery,
                 child: Container(
@@ -590,37 +559,51 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
     );
   }
 
-  // ── Scan triggered (tap tombol) ─────────────────────────
-  Future<void> _onScanTriggered() async {
-    if (_isProcessing || _scanSuccess) return;
+  // ════════════════════════════════════════════════════════
+  // 🔥🔥🔥 INTI PERBAIKAN — HANDLER HASIL DECODE QR REAL 🔥🔥🔥
+  // Dipanggil otomatis oleh MobileScanner setiap kali ada QR
+  // terdeteksi di depan kamera. INI yang dikirim ke backend,
+  // BUKAN _barcodeValue milik akun sendiri.
+  // ════════════════════════════════════════════════════════
+  Future<void> _onBarcodeDetected(BarcodeCapture capture) async {
+    if (_isProcessing || _scanSuccess || _scanLocked) return;
+
+    final barcodes = capture.barcodes;
+    if (barcodes.isEmpty) return;
+
+    final String? rawValue = barcodes.first.rawValue;
+    if (rawValue == null || rawValue.trim().isEmpty) return;
+
+    // 🔒 lock supaya tidak ke-trigger berkali-kali selagi 1 frame
+    // masih mengandung QR yang sama
+    _scanLocked = true;
+
     HapticFeedback.heavyImpact();
 
     setState(() {
       _isProcessing = true;
-      _scanMessage = null;
+      _scanMessage  = null;
     });
 
-    // Validasi: harus punya barcode value
-    if (_barcodeValue == null || _barcodeValue!.isEmpty) {
-      setState(() {
-        _isProcessing = false;
-        _scanMessage  = 'Barcode belum digenerate. Silakan generate dulu.';
-      });
-      return;
-    }
-
-    // Validasi & Extract barcode code
-    final String? extractedCode = AbsensiService.extractBarcodeCode(_barcodeValue!);
+    // ── Extract & validasi format dari HASIL DECODE KAMERA ───
+    final String? extractedCode =
+        AbsensiService.extractBarcodeCode(rawValue);
 
     if (extractedCode == null) {
       setState(() {
         _isProcessing = false;
-        _scanMessage  = 'Barcode tidak valid atau tidak dikenali';
+        _scanMessage  = 'QR yang di-scan bukan barcode absensi yang valid ❌';
       });
+      _unlockAfterDelay();
       return;
     }
 
-    // 🔥 DINAMIS: Kirim sesuai tipe dari service (masuk/pulang)
+    // ── Kirim ke backend sesuai tipe (masuk/pulang) ──────────
+    // Backend akan memvalidasi:
+    //   1. Apakah barcode_value ini terdaftar di database
+    //   2. Apakah barcode ini MILIK akun yang sedang login
+    // Kalau salah satu gagal → response success:false dengan
+    // pesan yang jelas, dan kita TAMPILKAN APA ADANYA ke user.
     Map<String, dynamic> result;
     if (_tipe == TipeAbsensiBarcode.masuk) {
       result = await AbsensiService.absenMasukBarcode(
@@ -642,15 +625,29 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
 
     if (result['success'] == true) {
       HapticFeedback.heavyImpact();
+      // hentikan scanner biar tidak terus mendeteksi
+      _scannerController?.stop();
       setState(() {
         _scanSuccess = true;
         _scanMessage = result['message'] ?? 'Absen berhasil ✅';
       });
     } else {
+      // 🔥 GAGAL — termasuk kasus "barcode bukan milik Anda"
       setState(() {
-        _scanMessage  = result['message'] ?? 'Gagal melakukan absensi';
+        _scanMessage = result['message'] ?? 'Gagal melakukan absensi';
       });
+      _unlockAfterDelay();
     }
+  }
+
+  // Beri jeda sebelum mengizinkan deteksi berikutnya, supaya
+  // user sempat membaca pesan gagal & tidak langsung spam scan.
+  void _unlockAfterDelay() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _scanLocked = false;
+      }
+    });
   }
 
   void _showErrorSnack(String pesan) {
@@ -710,7 +707,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    // 🔥 Loading status absensi dari AbsensiRealtimeService
     if (_loadingStatus) {
       return Scaffold(
         backgroundColor: Colors.black,
@@ -762,14 +758,32 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // ── Kamera live ────────────────────────────
-              if (_kameraReady && _controller != null)
+              // ── 🔥 Kamera scanner REAL ─────────────────
+              if (_scannerReady &&
+                  _scannerController != null &&
+                  !_scanSuccess)
                 ClipRect(
                   child: OverflowBox(
                     alignment: Alignment.center,
-                    child: AspectRatio(
-                      aspectRatio: _controller!.value.aspectRatio,
-                      child: CameraPreview(_controller!),
+                    child: MobileScanner(
+                      controller: _scannerController,
+                      onDetect: _onBarcodeDetected,
+                      errorBuilder: (context, error, child) {
+                        return Container(
+                          color: const Color(0xFF040D1A),
+                          child: Center(
+                            child: Text(
+                              'Gagal mengakses kamera.\nIzinkan akses kamera terlebih dahulu.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 12,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 )
@@ -784,14 +798,12 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 🔥 Label tipe absensi — DINAMIS dari service (di ATAS)
+                    // Label tipe absensi — DINAMIS dari service
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _tipe == TipeAbsensiBarcode.masuk
-                            ? const Color(0xFF1D4ED8).withOpacity(0.88)
-                            : const Color(0xFF1D4ED8).withOpacity(0.88),
+                        color: const Color(0xFF1D4ED8).withOpacity(0.88),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -820,13 +832,13 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                       opacity: _scanSuccess ? 0 : 1,
                       duration: const Duration(milliseconds: 300),
                       child: Text(
-                        _kameraError != null
-                            ? _kameraError!
+                        _scannerError != null
+                            ? _scannerError!
                             : _scanMessage != null
                                 ? _scanMessage!
                                 : _isProcessing
                                     ? 'Memproses absensi...'
-                                    : 'Tahan tombol untuk scan barcode',
+                                    : 'Arahkan kamera ke barcode absensi Anda',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: _scanMessage != null &&
@@ -844,13 +856,12 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
 
                     const SizedBox(height: 18),
 
-                    // 🔥 Viewfinder barcode — SAMA PERSIS KAYAK CAMERA (kotak 1:1)
+                    // Viewfinder
                     SizedBox(
                       width: size.width * 0.72,
                       height: size.width * 0.72,
                       child: Stack(
                         children: [
-                          // Corner guide sama persis camera
                           CustomPaint(
                             size: Size(size.width * 0.72, size.width * 0.72),
                             painter: _CornerGuidePainter(
@@ -858,13 +869,12 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                                   ? const Color(0xFF16A34A)
                                   : _isProcessing
                                       ? Colors.amber
-                                      : _tipe == TipeAbsensiBarcode.masuk
-                                          ? const Color(0xFF1D4ED8)
-                                          : const Color(0xFF1D4ED8),
+                                      : (_scanMessage != null
+                                          ? const Color(0xFFDC2626)
+                                          : const Color(0xFF1D4ED8)),
                             ),
                           ),
 
-                          // Processing overlay
                           if (_isProcessing)
                             Container(
                               decoration: BoxDecoration(
@@ -891,7 +901,6 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
                               ),
                             ),
 
-                          // Sukses overlay
                           if (_scanSuccess)
                             Container(
                               decoration: BoxDecoration(
@@ -910,10 +919,9 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
 
                     const SizedBox(height: 28),
 
-                    // 🔥 Tombol scan — SAMA PERSIS KAYAK CAMERA (bulat, pulse)
-                    if (!_scanSuccess && !_isProcessing) _buildScanButton(),
-                    if (_isProcessing) _buildProcessingIndicator(),
                     if (_scanSuccess) _buildSuksesCard(),
+                    if (!_scanSuccess && !_isProcessing && _scanMessage != null)
+                      _buildGagalCard(),
                   ],
                 ),
               ),
@@ -983,80 +991,31 @@ class _AbsensiBarcodesModalState extends State<AbsensiBarcodesModal>
     );
   }
 
-  // 🔥 Tombol scan — SAMA PERSIS KAYAK CAMERA (bulat, pulse, border)
-  Widget _buildScanButton() {
-    return GestureDetector(
-      onTap: _onScanTriggered,
-      child: AnimatedBuilder(
-        animation: _pulseAnim,
-        builder: (_, child) => Transform.scale(
-          scale: _pulseAnim.value,
-          child: child,
-        ),
-        child: Container(
-          width: 78,
-          height: 78,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: _tipe == TipeAbsensiBarcode.masuk
-                  ? const Color(0xFF1D4ED8)
-                  : const Color(0xFF1D4ED8),
-              width: 3,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Container(
-              decoration: BoxDecoration(
-                color: _tipe == TipeAbsensiBarcode.masuk
-                    ? const Color(0xFF1D4ED8)
-                    : const Color(0xFF1D4ED8),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _tipe == TipeAbsensiBarcode.masuk
-                    ? Icons.camera_alt_rounded
-                    : Icons.camera_alt_rounded,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-          ),
-        ),
+  // ── 🔥 Kartu pesan GAGAL (mis. "barcode bukan milik Anda") ─
+  Widget _buildGagalCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: const Color(0xFFDC2626).withOpacity(0.4)),
       ),
-    );
-  }
-
-  // ── Processing indicator ──────────────────────────────────
-  Widget _buildProcessingIndicator() {
-    return SizedBox(
-      width: 78,
-      height: 78,
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
         children: [
-          SizedBox(
-            width: 78,
-            height: 78,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              backgroundColor: Colors.amber.withOpacity(0.1),
-              color: Colors.amber,
-              strokeCap: StrokeCap.round,
+          const Icon(Icons.cancel_rounded,
+              color: Color(0xFFEF4444), size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Coba scan ulang barcode milik Anda sendiri',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 11,
+                fontFamily: 'Poppins',
+              ),
             ),
-          ),
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.amber.withOpacity(0.14),
-              border: Border.all(
-                  color: Colors.amber.withOpacity(0.4), width: 2),
-            ),
-            child: const Icon(Icons.hourglass_empty_rounded,
-                color: Colors.amber, size: 24),
           ),
         ],
       ),
@@ -1208,7 +1167,7 @@ class _BarcodeActionBtn extends StatelessWidget {
   }
 }
 
-// 🔥 Corner guide painter — SAMA PERSIS KAYAK CAMERA
+// Corner guide painter
 class _CornerGuidePainter extends CustomPainter {
   final Color warna;
   const _CornerGuidePainter({required this.warna});

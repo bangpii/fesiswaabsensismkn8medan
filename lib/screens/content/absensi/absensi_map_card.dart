@@ -1,22 +1,27 @@
 // lib/screens/content/absensi/absensi_map_card.dart
 //
-// 🗺️ ABSENSI MAP CARD — Real Map (OpenStreetMap) + Routing OSRM
+// 🗺️ ABSENSI MAP CARD — Google Maps (real, sesuai Google Cloud API key)
 //
 // Fitur:
-//   ✅ Peta sungguhan OpenStreetMap (ada jalan, nama tempat, bangunan)
+//   ✅ Peta sungguhan Google Maps (sesuai API key di AndroidManifest.xml)
+//   ✅ Koordinat sekolah DITARIK DARI BACKEND (LocationService → /lokasi/aktif)
 //   ✅ Lokasi user realtime (marker bergerak saat HP bergerak)
-//   ✅ Marker sekolah tetap di koordinat backend
+//   ✅ Marker sekolah & user ukuran STANDAR (tidak kebesaran)
+//   ✅ Zona sekolah digambar PERSEGI PANJANG (Polygon) sesuai
+//      lat_min/lat_max/lng_min/lng_max dari database — BUKAN lingkaran radius
 //   ✅ Garis rute dari user → sekolah (via OSRM API, gratis)
 //   ✅ Jarak & estimasi waktu jalan kaki akurat dari routing
 //   ✅ Status "Dalam Zona" / "Luar Zona" otomatis
 //   ✅ Fullscreen view
 //
+// ⚠️ Logika validasi absen (camera/barcode) TIDAK ada di file ini —
+//    itu murni ditangani backend (AbsensiController.php) & TIDAK diubah.
+//
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'absensi_models.dart';
 import '../../../services/location_service.dart';
@@ -44,11 +49,138 @@ class _RouteResult {
 
   String get durationReadable {
     final minutes = (durationSeconds / 60).ceil();
-    if (minutes < 60) return '~$minutes menit jalan kaki';
+    if (minutes < 60) return '~$minutes menit Naik Kendaraan';
     final hours = minutes ~/ 60;
     final rem = minutes % 60;
     return '~$hours jam $rem menit';
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// HASIL GENERATE MARKER ICON: bitmap + anchor yang presisi
+// ═══════════════════════════════════════════════════════════
+class _MarkerIcon {
+  final BitmapDescriptor bitmap;
+  final Offset anchor; // posisi titik koordinat sebenarnya di dalam gambar (0..1)
+
+  const _MarkerIcon({required this.bitmap, required this.anchor});
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPER — Generate marker icon custom (lingkaran kecil + icon + label)
+// Ukuran dibuat STANDAR (sebesar pin biasa), tidak kebesaran.
+// Anchor dihitung presis di titik tengah lingkaran (bukan tengah
+// keseluruhan gambar), supaya posisi pin di peta akurat.
+// ═══════════════════════════════════════════════════════════
+Future<_MarkerIcon> _buildMarkerBitmap({
+  required Color color,
+  required IconData icon,
+  required String label,
+}) async {
+  const double circleSize = 56;    // ukuran lingkaran — standar, tidak besar
+  const double iconFontSize = circleSize * 0.5;
+  const double labelFontSize = 13;
+  const double labelPaddingH = 9;
+  const double labelPaddingV = 4;
+  const double gap = 3; // jarak lingkaran ke label
+
+  // ── Hitung ukuran label dulu ───────────────────────────
+  final labelPainter = TextPainter(textDirection: TextDirection.ltr)
+    ..text = TextSpan(
+      text: label,
+      style: const TextStyle(
+        fontSize: labelFontSize,
+        fontWeight: FontWeight.w700,
+        color: Colors.white,
+      ),
+    )
+    ..layout();
+
+  final labelBoxWidth = labelPainter.width + (labelPaddingH * 2);
+  final labelBoxHeight = labelPainter.height + (labelPaddingV * 2);
+
+  final canvasWidth = labelBoxWidth > circleSize ? labelBoxWidth : circleSize;
+  final canvasHeight = circleSize + gap + labelBoxHeight;
+
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(
+    recorder,
+    Rect.fromLTWH(0, 0, canvasWidth, canvasHeight),
+  );
+
+  final circleCenter = Offset(canvasWidth / 2, circleSize / 2);
+  final circleRadius = (circleSize / 2) - 3;
+
+  // ── Shadow tipis ───────────────────────────────────────
+  canvas.drawCircle(
+    circleCenter.translate(0, 1.5),
+    circleRadius,
+    Paint()
+      ..color = Colors.black.withValues(alpha: 0.22)
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 2.5),
+  );
+
+  // ── Lingkaran utama ────────────────────────────────────
+  canvas.drawCircle(circleCenter, circleRadius, Paint()..color = color);
+
+  // ── Border putih tipis ──────────────────────────────────
+  canvas.drawCircle(
+    circleCenter,
+    circleRadius,
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..color = Colors.white,
+  );
+
+  // ── Icon di tengah lingkaran ─────────────────────────────
+  final iconPainter = TextPainter(textDirection: TextDirection.ltr);
+  iconPainter.text = TextSpan(
+    text: String.fromCharCode(icon.codePoint),
+    style: TextStyle(
+      fontSize: iconFontSize,
+      fontFamily: icon.fontFamily,
+      package: icon.fontPackage,
+      color: Colors.white,
+    ),
+  );
+  iconPainter.layout();
+  iconPainter.paint(
+    canvas,
+    circleCenter - Offset(iconPainter.width / 2, iconPainter.height / 2),
+  );
+
+  // ── Label pill di bawah lingkaran ───────────────────────
+  final labelRect = RRect.fromRectAndRadius(
+    Rect.fromLTWH(
+      (canvasWidth - labelBoxWidth) / 2,
+      circleSize + gap,
+      labelBoxWidth,
+      labelBoxHeight,
+    ),
+    Radius.circular(labelBoxHeight / 2),
+  );
+  canvas.drawRRect(labelRect, Paint()..color = color);
+  labelPainter.paint(
+    canvas,
+    Offset(
+      (canvasWidth - labelPainter.width) / 2,
+      circleSize + gap + labelPaddingV,
+    ),
+  );
+
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(canvasWidth.ceil(), canvasHeight.ceil());
+  final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+
+  // 🆕 Anchor presisi: titik koordinat = tengah lingkaran,
+  // bukan tengah seluruh gambar (yang sudah termasuk label di bawah).
+  final anchor = Offset(0.5, (circleSize / 2) / canvasHeight);
+
+  return _MarkerIcon(
+    bitmap: BitmapDescriptor.bytes(byteData!.buffer.asUint8List()),
+    anchor: anchor,
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -75,17 +207,23 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
   bool _isFetchingRoute = false;
 
   // ── Map Controller ────────────────────────────────────────
-  late MapController _mapController;
+  GoogleMapController? _mapController;
   bool _mapReady = false;
 
   // ── Subscription ─────────────────────────────────────────
   StreamSubscription<UserLocation>? _locationSub;
 
-  // Koordinat sekolah (dari backend)
-  static const LatLng _schoolLatLng = LatLng(
-    LocationService.schoolCenterLat,
-    LocationService.schoolCenterLng,
-  );
+  // ── Marker icon custom (di-generate sekali, async) ────────
+  _MarkerIcon? _schoolIcon;
+  _MarkerIcon? _userIconInside;
+  _MarkerIcon? _userIconOutside;
+
+  // 🆕 Koordinat sekolah SEKARANG dari LocationService,
+  // yang sudah ditarik dari backend lewat loadSchoolLocation().
+  LatLng get _schoolLatLng => LatLng(
+        LocationService.schoolCenterLat,
+        LocationService.schoolCenterLng,
+      );
 
   // ── Animasi status badge ──────────────────────────────────
   late AnimationController _pulseCtrl;
@@ -94,7 +232,6 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
 
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -104,7 +241,8 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
 
-    _startLocationTracking();
+    _generateMarkerIcons();
+    _initLokasiDanTracking();
   }
 
   @override
@@ -112,7 +250,52 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
     _pulseCtrl.dispose();
     _locationSub?.cancel();
     LocationService.stopTracking();
+    _mapController?.dispose();
     super.dispose();
+  }
+
+  // ── Generate marker icon custom sekali di awal ────────────
+  Future<void> _generateMarkerIcons() async {
+    final school = await _buildMarkerBitmap(
+      color: const Color(0xFF1D4ED8),
+      icon: Icons.school_rounded,
+      label: 'SEKOLAH',
+    );
+    final userIn = await _buildMarkerBitmap(
+      color: const Color(0xFF16A34A),
+      icon: Icons.person_rounded,
+      label: 'KAMU',
+    );
+    final userOut = await _buildMarkerBitmap(
+      color: const Color(0xFFDC2626),
+      icon: Icons.person_rounded,
+      label: 'KAMU',
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _schoolIcon = school;
+      _userIconInside = userIn;
+      _userIconOutside = userOut;
+    });
+  }
+
+  // 🆕 Ambil koordinat sekolah dari backend dulu,
+  // baru mulai tracking lokasi user
+  Future<void> _initLokasiDanTracking() async {
+    await LocationService.loadSchoolLocation();
+    if (!mounted) return;
+
+    // Refresh kamera ke posisi sekolah yang benar (kalau beda
+    // dari default) setelah data backend masuk
+    setState(() {});
+    if (_mapReady && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_schoolLatLng, 16.5),
+      );
+    }
+
+    await _startLocationTracking();
   }
 
   // ── Mulai tracking lokasi ─────────────────────────────────
@@ -176,14 +359,11 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
   void _updateLocation(UserLocation location) {
     setState(() => _userLocation = location);
 
-    // Pindah kamera peta ke posisi user (pertama kali)
-    if (_mapReady && !_isFetchingRoute) {
-      try {
-        _mapController.move(
-          LatLng(location.lat, location.lng),
-          _mapController.camera.zoom,
-        );
-      } catch (_) {}
+    // Pindah kamera peta ke posisi user (smooth)
+    if (_mapReady && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLng(LatLng(location.lat, location.lng)),
+      );
     }
 
     // Fetch rute kalau user di luar zona
@@ -239,6 +419,72 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
     }
   }
 
+  // ── Bangun markers untuk GoogleMap ────────────────────────
+  Set<Marker> _buildMarkers() {
+    final markers = <Marker>{
+      Marker(
+        markerId: const MarkerId('sekolah'),
+        position: _schoolLatLng,
+        icon: _schoolIcon?.bitmap ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        anchor: _schoolIcon?.anchor ?? const Offset(0.5, 0.5),
+        infoWindow: InfoWindow(title: LocationService.namaLokasi),
+      ),
+    };
+
+    final loc = _userLocation;
+    if (loc != null) {
+      final icon = loc.isInsideZone ? _userIconInside : _userIconOutside;
+      markers.add(
+        Marker(
+          markerId: const MarkerId('user'),
+          position: LatLng(loc.lat, loc.lng),
+          anchor: icon?.anchor ?? const Offset(0.5, 0.5),
+          icon: icon?.bitmap ??
+              BitmapDescriptor.defaultMarkerWithHue(
+                loc.isInsideZone ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueRed,
+              ),
+          infoWindow: const InfoWindow(title: 'Kamu'),
+        ),
+      );
+    }
+
+    return markers;
+  }
+
+  // 🆕 Zona sekolah digambar sebagai PERSEGI PANJANG (Polygon),
+  // titik sudutnya PERSIS dari lat_min/lat_max/lng_min/lng_max
+  // di tabel lokasis — bukan lingkaran radius meter.
+  Set<Polygon> _buildZonePolygon() {
+    return {
+      Polygon(
+        polygonId: const PolygonId('zona_sekolah'),
+        points: [
+          LatLng(LocationService.latMin, LocationService.lngMin),
+          LatLng(LocationService.latMin, LocationService.lngMax),
+          LatLng(LocationService.latMax, LocationService.lngMax),
+          LatLng(LocationService.latMax, LocationService.lngMin),
+        ],
+        fillColor: const Color(0xFF1D4ED8).withValues(alpha: 0.08),
+        strokeColor: const Color(0xFF1D4ED8).withValues(alpha: 0.45),
+        strokeWidth: 2,
+      ),
+    };
+  }
+
+  Set<Polyline> _buildPolylines() {
+    if (_routeResult == null || _routeResult!.points.isEmpty) return {};
+    return {
+      Polyline(
+        polylineId: const PolylineId('rute_ke_sekolah'),
+        points: _routeResult!.points,
+        color: const Color(0xFF1D4ED8),
+        width: 4,
+        patterns: [PatternItem.dot, PatternItem.gap(10)],
+      ),
+    };
+  }
+
   // ── Warna zona ────────────────────────────────────────────
   Color get _zoneColor =>
       (_userLocation?.isInsideZone ?? false)
@@ -259,14 +505,16 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
         userLocation: _userLocation,
         routeResult: _routeResult,
         schoolLatLng: _schoolLatLng,
+        schoolIcon: _schoolIcon,
+        userIconInside: _userIconInside,
+        userIconOutside: _userIconOutside,
         onClose: () => Navigator.of(context).pop(),
-        onRetry: _startLocationTracking,
       ),
     );
   }
 
   // ═══════════════════════════════════════════════════════════
-  // BUILD UTAMA — HANYA SATU METHOD BUILD DI SINI!
+  // BUILD UTAMA
   // ═══════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
@@ -306,8 +554,8 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'Lokasi Absensi',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
@@ -318,8 +566,8 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'SMKN 8 Medan, Sumatera Utara',
-                        style: TextStyle(
+                        LocationService.namaLokasi,
+                        style: const TextStyle(
                           fontSize: 11,
                           color: Color(0xFF94A3B8),
                           fontFamily: 'Poppins',
@@ -495,7 +743,7 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
       bannerColor = const Color(0xFFFFFBEB);
       borderColor = const Color(0xFFF59E0B).withValues(alpha: 0.3);
       textColor = const Color(0xFF92400E);
-      icon = '🚶';
+      icon = '🚗';
     } else {
       final dist = LocationService.formatDistance(loc.distanceToZone);
       distanceText = '$dist lagi ke zona sekolah';
@@ -637,87 +885,29 @@ class _AbsensiMapCardState extends State<AbsensiMapCard>
     );
   }
 
-  // ── Peta sungguhan OpenStreetMap ──────────────────────────
+  // ── Google Maps utama (preview, di dalam card) ────────────
   Widget _buildRealMap() {
-    final userLoc = _userLocation;
-    final initialCenter = userLoc != null
-        ? LatLng(userLoc.lat, userLoc.lng)
-        : _schoolLatLng;
-
-    // Zoom: kalau dalam zona tampilkan lebih dekat, kalau jauh zoom out
-    double initialZoom = 16.5;
-    if (userLoc != null && userLoc.distanceToSchool > 500) {
-      initialZoom = 14.0;
-    }
-
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        initialCenter: initialCenter,
-        initialZoom: initialZoom,
-        minZoom: 10,
-        maxZoom: 19,
-        onMapReady: () => setState(() => _mapReady = true),
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: _userLocation != null
+            ? LatLng(_userLocation!.lat, _userLocation!.lng)
+            : _schoolLatLng,
+        zoom: 16.5,
       ),
-      children: [
-        // ── Tile OpenStreetMap ──────────────────────────
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.smkn8medan.absensi',
-          tileProvider: CancellableNetworkTileProvider(),
-        ),
-
-        // ── Polyline rute user → sekolah ───────────────
-        if (_routeResult != null && _routeResult!.points.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: _routeResult!.points,
-                color: const Color(0xFF1D4ED8),
-                strokeWidth: 4.0,
-                pattern: const StrokePattern.dotted(),
-              ),
-            ],
-          ),
-
-        // ── Lingkaran zona sekolah ─────────────────────
-        CircleLayer(
-          circles: [
-            CircleMarker(
-              point: _schoolLatLng,
-              radius: 100,
-              useRadiusInMeter: true,
-              color: const Color(0xFF1D4ED8).withValues(alpha: 0.08),
-              borderColor: const Color(0xFF1D4ED8).withValues(alpha: 0.4),
-              borderStrokeWidth: 1.5,
-            ),
-          ],
-        ),
-
-        // ── Marker sekolah + user ──────────────────────
-        MarkerLayer(
-          markers: [
-            // Marker Sekolah
-            Marker(
-              point: _schoolLatLng,
-              width: 60,
-              height: 70,
-              alignment: Alignment.topCenter,
-              child: const _SchoolMarker(),
-            ),
-
-            // Marker User (kalau lokasi tersedia)
-            if (userLoc != null)
-              Marker(
-                point: LatLng(userLoc.lat, userLoc.lng),
-                width: 56,
-                height: 66,
-                alignment: Alignment.topCenter,
-                child: _UserMarker(isInsideZone: userLoc.isInsideZone),
-              ),
-          ],
-        ),
-      ],
+      onMapCreated: (controller) {
+        _mapController = controller;
+        _mapReady = true;
+      },
+      markers: _buildMarkers(),
+      polygons: _buildZonePolygon(),
+      polylines: _buildPolylines(),
+      myLocationEnabled: false,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      mapToolbarEnabled: false,
+      compassEnabled: false,
+      buildingsEnabled: true,
+      indoorViewEnabled: false,
     );
   }
 
@@ -816,15 +1006,19 @@ class _FullscreenMapView extends StatefulWidget {
   final UserLocation? userLocation;
   final _RouteResult? routeResult;
   final LatLng schoolLatLng;
+  final _MarkerIcon? schoolIcon;
+  final _MarkerIcon? userIconInside;
+  final _MarkerIcon? userIconOutside;
   final VoidCallback onClose;
-  final VoidCallback onRetry;
 
   const _FullscreenMapView({
     required this.userLocation,
     required this.routeResult,
     required this.schoolLatLng,
+    required this.schoolIcon,
+    required this.userIconInside,
+    required this.userIconOutside,
     required this.onClose,
-    required this.onRetry,
   });
 
   @override
@@ -832,7 +1026,7 @@ class _FullscreenMapView extends StatefulWidget {
 }
 
 class _FullscreenMapViewState extends State<_FullscreenMapView> {
-  late MapController _mapCtrl;
+  GoogleMapController? _mapController;
   StreamSubscription<UserLocation>? _sub;
   UserLocation? _loc;
   _RouteResult? _route;
@@ -841,24 +1035,23 @@ class _FullscreenMapViewState extends State<_FullscreenMapView> {
   @override
   void initState() {
     super.initState();
-    _mapCtrl = MapController();
     _loc = widget.userLocation;
     _route = widget.routeResult;
 
     _sub = LocationService.locationStream?.listen((loc) {
-      if (mounted) {
-        setState(() => _loc = loc);
-        try {
-          _mapCtrl.move(LatLng(loc.lat, loc.lng), _mapCtrl.camera.zoom);
-        } catch (_) {}
-        if (!loc.isInsideZone) _fetchRoute(loc.lat, loc.lng);
-      }
+      if (!mounted) return;
+      setState(() => _loc = loc);
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLng(LatLng(loc.lat, loc.lng)),
+      );
+      if (!loc.isInsideZone) _fetchRoute(loc.lat, loc.lng);
     });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -901,13 +1094,71 @@ class _FullscreenMapViewState extends State<_FullscreenMapView> {
   Color get _zoneColor =>
       (_loc?.isInsideZone ?? false) ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
 
+  Set<Marker> _buildMarkers() {
+    final markers = <Marker>{
+      Marker(
+        markerId: const MarkerId('sekolah'),
+        position: widget.schoolLatLng,
+        icon: widget.schoolIcon?.bitmap ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        anchor: widget.schoolIcon?.anchor ?? const Offset(0.5, 0.5),
+        infoWindow: InfoWindow(title: LocationService.namaLokasi),
+      ),
+    };
+    if (_loc != null) {
+      final icon = _loc!.isInsideZone ? widget.userIconInside : widget.userIconOutside;
+      markers.add(
+        Marker(
+          markerId: const MarkerId('user'),
+          position: LatLng(_loc!.lat, _loc!.lng),
+          anchor: icon?.anchor ?? const Offset(0.5, 0.5),
+          icon: icon?.bitmap ??
+              BitmapDescriptor.defaultMarkerWithHue(
+                _loc!.isInsideZone ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueRed,
+              ),
+          infoWindow: const InfoWindow(title: 'Kamu'),
+        ),
+      );
+    }
+    return markers;
+  }
+
+  // 🆕 Sama seperti preview card: zona digambar PERSEGI PANJANG
+  // dari lat_min/lat_max/lng_min/lng_max — bukan lingkaran.
+  Set<Polygon> _buildZonePolygon() {
+    return {
+      Polygon(
+        polygonId: const PolygonId('zona_sekolah'),
+        points: [
+          LatLng(LocationService.latMin, LocationService.lngMin),
+          LatLng(LocationService.latMin, LocationService.lngMax),
+          LatLng(LocationService.latMax, LocationService.lngMax),
+          LatLng(LocationService.latMax, LocationService.lngMin),
+        ],
+        fillColor: const Color(0xFF1D4ED8).withValues(alpha: 0.08),
+        strokeColor: const Color(0xFF1D4ED8).withValues(alpha: 0.45),
+        strokeWidth: 2,
+      ),
+    };
+  }
+
+  Set<Polyline> _buildPolylines() {
+    if (_route == null || _route!.points.isEmpty) return {};
+    return {
+      Polyline(
+        polylineId: const PolylineId('rute_ke_sekolah'),
+        points: _route!.points,
+        color: const Color(0xFF1D4ED8),
+        width: 5,
+        patterns: [PatternItem.dot, PatternItem.gap(10)],
+      ),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final loc = _loc;
-    final initialCenter = loc != null
-        ? LatLng(loc.lat, loc.lng)
-        : widget.schoolLatLng;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -919,66 +1170,22 @@ class _FullscreenMapViewState extends State<_FullscreenMapView> {
           children: [
             // ── Peta fullscreen ────────────────────────────
             Positioned.fill(
-              child: FlutterMap(
-                mapController: _mapCtrl,
-                options: MapOptions(
-                  initialCenter: initialCenter,
-                  initialZoom: 16.5,
-                  minZoom: 10,
-                  maxZoom: 19,
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: loc != null
+                      ? LatLng(loc.lat, loc.lng)
+                      : widget.schoolLatLng,
+                  zoom: 16.5,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.smkn8medan.absensi',
-                    tileProvider: CancellableNetworkTileProvider(),
-                  ),
-                  if (_route != null && _route!.points.isNotEmpty)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: _route!.points,
-                          color: const Color(0xFF1D4ED8),
-                          strokeWidth: 5.0,
-                          pattern: const StrokePattern.dotted(),
-                        ),
-                      ],
-                    ),
-                  CircleLayer(
-                    circles: [
-                      CircleMarker(
-                        point: widget.schoolLatLng,
-                        radius: 100,
-                        useRadiusInMeter: true,
-                        color: const Color(0xFF1D4ED8).withValues(alpha: 0.08),
-                        borderColor: const Color(0xFF1D4ED8).withValues(alpha: 0.4),
-                        borderStrokeWidth: 2,
-                      ),
-                    ],
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: widget.schoolLatLng,
-                        width: 70,
-                        height: 80,
-                        alignment: Alignment.topCenter,
-                        child: const _SchoolMarker(large: true),
-                      ),
-                      if (loc != null)
-                        Marker(
-                          point: LatLng(loc.lat, loc.lng),
-                          width: 64,
-                          height: 74,
-                          alignment: Alignment.topCenter,
-                          child: _UserMarker(
-                            isInsideZone: loc.isInsideZone,
-                            large: true,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
+                onMapCreated: (controller) => _mapController = controller,
+                markers: _buildMarkers(),
+                polygons: _buildZonePolygon(),
+                polylines: _buildPolylines(),
+                myLocationEnabled: false,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: true,
+                mapToolbarEnabled: false,
+                compassEnabled: true,
               ),
             ),
 
@@ -1019,11 +1226,11 @@ class _FullscreenMapViewState extends State<_FullscreenMapView> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                                const Text(
                                   'Lokasi Absensi',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
@@ -1033,8 +1240,8 @@ class _FullscreenMapViewState extends State<_FullscreenMapView> {
                                   ),
                                 ),
                                 Text(
-                                  'SMKN 8 Medan, Sumatera Utara',
-                                  style: TextStyle(
+                                  LocationService.namaLokasi,
+                                  style: const TextStyle(
                                     fontSize: 12,
                                     color: Color(0xFF94A3B8),
                                     fontFamily: 'Poppins',
@@ -1222,122 +1429,6 @@ class _FullscreenMapViewState extends State<_FullscreenMapView> {
         height: 40,
         color: const Color(0xFFE2E8F0),
       );
-}
-
-// ═══════════════════════════════════════════════════════════
-// MARKER WIDGETS
-// ═══════════════════════════════════════════════════════════
-
-class _SchoolMarker extends StatelessWidget {
-  final bool large;
-  const _SchoolMarker({this.large = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final size = large ? 50.0 : 36.0;
-    final iconSize = large ? 28.0 : 20.0;
-    final fontSize = large ? 9.0 : 7.5;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1D4ED8),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF1D4ED8).withValues(alpha: 0.4),
-                blurRadius: large ? 20 : 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Icon(Icons.school_rounded, color: Colors.white, size: iconSize),
-        ),
-        const SizedBox(height: 2),
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: large ? 10 : 6,
-            vertical: large ? 4 : 2,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1D4ED8),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            'SMKN 8',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Poppins',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _UserMarker extends StatelessWidget {
-  final bool isInsideZone;
-  final bool large;
-  const _UserMarker({required this.isInsideZone, this.large = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final size = large ? 44.0 : 32.0;
-    final iconSize = large ? 24.0 : 18.0;
-    final fontSize = large ? 8.5 : 7.0;
-    final color = isInsideZone ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.5),
-                blurRadius: large ? 16 : 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Icon(Icons.person_rounded, color: Colors.white, size: iconSize),
-        ),
-        const SizedBox(height: 2),
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: large ? 8 : 5,
-            vertical: large ? 3 : 2,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Text(
-            'Kamu',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Poppins',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // ═══════════════════════════════════════════════════════════

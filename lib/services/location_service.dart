@@ -8,14 +8,14 @@
 //   - Hitung jarak user ke titik tengah sekolah (dalam meter)
 //   - Akurasi GPS, kecepatan, altitude
 //   - Request permission otomatis
-//
-// Koordinat Area Sekolah (Rectangle dari backend):
-//   lat_min: 3.565500  lat_max: 3.567300
-//   lng_min: 98.645900 lng_max: 98.647300
+//   - 🆕 Koordinat sekolah DITARIK DARI BACKEND (tabel lokasis),
+//     bukan hardcode lagi. Hardcode di bawah ini cuma FALLBACK
+//     kalau API gagal/offline, supaya validasi tetap jalan.
 //
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
+import 'api_service.dart';
 
 // ═══════════════════════════════════════════════════════════
 // MODEL LOKASI USER
@@ -71,20 +71,40 @@ class UserLocation {
 // LOCATION SERVICE
 // ═══════════════════════════════════════════════════════════
 class LocationService {
-  // ── Koordinat Area Sekolah (sinkron dengan backend) ──────
-  static const double latMin = 3.565500;
-  static const double latMax = 3.567300;
-  static const double lngMin = 98.645900;
-  static const double lngMax = 98.647300;
+  // ── Koordinat Area Sekolah ────────────────────────────────
+  // 🆕 BUKAN const lagi — ini cuma nilai DEFAULT/FALLBACK
+  // (sama persis dengan fallback di AbsensiController.php kalau
+  // Lokasi::where('is_active', true)->first() == null).
+  // Nilai sebenarnya akan di-override oleh loadSchoolLocation()
+  // yang narik dari endpoint GET /lokasi/aktif.
+  static double latMin = 3.565500;
+  static double latMax = 3.567300;
+  static double lngMin = 98.645900;
+  static double lngMax = 98.647300;
 
-  // Titik tengah sekolah (untuk hitung jarak)
-  static const double schoolCenterLat = (latMin + latMax) / 2; // 3.566400
-  static const double schoolCenterLng = (lngMin + lngMax) / 2; // 98.646600
+  static String namaLokasi = 'SMKN 8 Medan';
 
-  // Radius zona (estimasi dari rectangle → diagonal/2)
-  // diagonal ≈ sqrt((latMax-latMin)² + (lngMax-lngMin)²) dalam meter
-  // ≈ sqrt((200m)² + (150m)²) ≈ 250m → radius ≈ 125m
-  static const double schoolRadiusMeters = 125.0;
+  // 🆕 Deep link Maps sekolah — sebelumnya hardcode di
+  // absensi_service.dart, sekarang ditarik dari backend juga
+  // (kolom maps_url di tabel lokasis). Tetap ada fallback.
+  static String mapsUrlSekolah = 'https://maps.app.goo.gl/pw9y3zJGtNeo1FG27';
+
+  static bool _lokasiLoaded = false;
+  static bool get isLokasiLoaded => _lokasiLoaded;
+
+  // Titik tengah sekolah (dihitung otomatis dari rectangle aktif)
+  static double get schoolCenterLat => (latMin + latMax) / 2;
+  static double get schoolCenterLng => (lngMin + lngMax) / 2;
+
+  // 🆕 Radius zona DIHITUNG dari rectangle backend yang sebenarnya
+  // (sebelumnya hardcode 125.0 meter, sekarang otomatis menyesuaikan
+  // kalau admin ganti area sekolah dari database).
+  static double get schoolRadiusMeters {
+    final lebar = calculateDistance(latMin, lngMin, latMin, lngMax);
+    final tinggi = calculateDistance(latMin, lngMin, latMax, lngMin);
+    final diagonal = math.sqrt((lebar * lebar) + (tinggi * tinggi));
+    return diagonal / 2;
+  }
 
   // ── Stream Controller ────────────────────────────────────
   static StreamController<UserLocation>? _controller;
@@ -95,6 +115,58 @@ class LocationService {
   static UserLocation? get lastLocation => _lastLocation;
 
   static Stream<UserLocation>? get locationStream => _controller?.stream;
+
+  // ═══════════════════════════════════════════════════════════
+  // 🆕 AMBIL KOORDINAT SEKOLAH DARI BACKEND
+  // GET /lokasi/aktif → { success, data: { lat_min, lat_max,
+  //                        lng_min, lng_max, nama_lokasi, maps_url } }
+  //
+  // Kalau gagal (offline / endpoint belum ada / error apapun),
+  // tetap pakai nilai default di atas — TIDAK akan crash app
+  // dan validasi absen tetap berjalan seperti biasa.
+  // ═══════════════════════════════════════════════════════════
+  static Future<bool> loadSchoolLocation() async {
+    try {
+      await ApiService.loadToken();
+
+      final response = await ApiService.dio.get('/lokasi/aktif');
+      final raw = response.data;
+
+      if (raw is Map && raw['success'] == true && raw['data'] != null) {
+        final d = raw['data'] as Map;
+
+        final newLatMin = double.tryParse(d['lat_min'].toString());
+        final newLatMax = double.tryParse(d['lat_max'].toString());
+        final newLngMin = double.tryParse(d['lng_min'].toString());
+        final newLngMax = double.tryParse(d['lng_max'].toString());
+
+        // Validasi data sebelum dipakai — jangan sampai
+        // override dengan nilai null/NaN
+        if (newLatMin != null && newLatMax != null &&
+            newLngMin != null && newLngMax != null) {
+          latMin = newLatMin;
+          latMax = newLatMax;
+          lngMin = newLngMin;
+          lngMax = newLngMax;
+
+          if (d['nama_lokasi'] != null) {
+            namaLokasi = d['nama_lokasi'].toString();
+          }
+          if (d['maps_url'] != null && d['maps_url'].toString().isNotEmpty) {
+            mapsUrlSekolah = d['maps_url'].toString();
+          }
+
+          _lokasiLoaded = true;
+          return true;
+        }
+      }
+    } catch (_) {
+      // Diam saja — fallback ke koordinat default di atas.
+      // Validasi backend (AbsensiController) tetap jadi sumber
+      // kebenaran utama saat absen beneran dikirim ke server.
+    }
+    return false;
+  }
 
   // ── Request Permission ───────────────────────────────────
   static Future<bool> requestPermission() async {
@@ -134,7 +206,6 @@ class LocationService {
   // ── Mulai Stream Lokasi Realtime ─────────────────────────
   // interval: seberapa sering update (default 1 detik)
   // distanceFilter: minimal jarak bergerak sebelum update (meter)
-    // ── Mulai Stream Lokasi Realtime ─────────────────────────
   static Future<bool> startTracking({
     int intervalMs = 1000,
     double distanceFilter = 2.0,
@@ -219,7 +290,8 @@ class LocationService {
   }
 
   // ── Cek Dalam Area Rectangle Sekolah ─────────────────────
-  // Sinkron 100% dengan backend PHP
+  // Sinkron 100% dengan backend PHP (sekarang sumber datanya
+  // juga sama-sama dari tabel lokasis)
   static bool isInsideSchoolArea(double lat, double lng) {
     return lat >= latMin && lat <= latMax && lng >= lngMin && lng <= lngMax;
   }

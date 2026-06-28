@@ -56,13 +56,9 @@ class CmsService {
     // load pertama
     await load();
 
-    // listen realtime global
-    SocketService.onStudentUpdate = (payload) async {
-
-      print("🔥 CMS REALTIME:");
-      print(payload);
-
-      // reload otomatis
+    // 📢 listen khusus CMS — tidak bentrok dengan onStudentUpdate
+    SocketService.onCmsUpdated = () async {
+      print("🔥 CMS REALTIME: reload...");
       await load();
     };
   }

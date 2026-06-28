@@ -289,11 +289,12 @@ class AbsensiService {
     }
   }
 
-  // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
   // 🗺️ DEEP LINK — URL Maps sekolah
+  // 🆕 Sekarang sumbernya dari backend (tabel lokasis.maps_url),
+  // ditarik via LocationService.loadSchoolLocation()
   // ══════════════════════════════════════════════════════
-  static const String mapsUrlSekolah =
-      'https://maps.app.goo.gl/pw9y3zJGtNeo1FG27';
+  static String get mapsUrlSekolah => LocationService.mapsUrlSekolah;
 
   // ══════════════════════════════════════════════════════
   // 🆕 HELPER LOKASI
